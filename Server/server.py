@@ -76,6 +76,7 @@ class PokerGame:
         self.hands = {}
         self.current_turn = 0
         self.bets = {player: 0 for player in players}
+        self.spectators = []  # Placeholder for up to 3 spectators
 
     def deal_hands(self):
         self.deck.shuffle()
@@ -98,6 +99,17 @@ class PokerGame:
     def next_turn(self):
         self.current_turn = (self.current_turn + 1) % len(self.players)
         return self.players[self.current_turn]
+
+    def determine_winner(self):
+        scores = self.evaluate_hands()
+        winner = max(scores, key=scores.get)
+        return winner, scores[winner]
+
+    def distribute_pot(self):
+        winner, score = self.determine_winner()
+        winnings = self.pot
+        self.pot = 0
+        return {"winner": winner, "score": score, "winnings": winnings}
 
 
 # API Endpoints
@@ -175,7 +187,8 @@ def player_action():
         elif action == "fold":
             game.players.remove(player)
             if len(game.players) == 1:
-                return jsonify({"message": f"{game.players[0]} wins the pot of {game.pot}."})
+                result = game.distribute_pot()
+                return jsonify({"message": f"{result['winner']} wins the pot of {result['winnings']} with score {result['score']}."})
         elif action == "call":
             max_bet = max(game.bets.values())
             game.bets[player] = max_bet
