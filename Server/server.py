@@ -5,7 +5,7 @@ import jwt
 import datetime
 import os
 from dotenv import load_dotenv
-from pokerkit import Deck, Hand, calculate_hand_strength
+from pokerkit import NoLimitTexasHoldem, Automation, Mode, Hand
 from flask import Flask, request, jsonify
 
 # Load environment variables
@@ -66,50 +66,57 @@ def verify_token():
 
 
 # Poker Game Class
+
+
+from pokerkit import Automation, NoLimitTexasHoldem, Mode
+
+from pokerkit import Automation, NoLimitTexasHoldem, Mode, Card
+
 class PokerGame:
     def __init__(self, game_id, players):
         self.game_id = game_id
-        self.deck = Deck()
         self.players = players
-        self.pot = 0
-        self.community_cards = []
-        self.hands = {}
+
+        # Initialize the state
+        self.state = NoLimitTexasHoldem.create_state(
+            automations=(
+                Automation.ANTE_POSTING,
+                Automation.BET_COLLECTION,
+                Automation.BLIND_OR_STRADDLE_POSTING,
+                Automation.HOLE_CARDS_SHOWING_OR_MUCKING,
+                Automation.HAND_KILLING,
+                Automation.CHIPS_PUSHING,
+                Automation.CHIPS_PULLING,
+            ),
+            ante_trimming_status=False,
+            raw_antes={-1: 0},  # No antes
+            raw_blinds_or_straddles=(10, 20),  # Small blind, big blind
+            min_bet=20,  # Minimum bet
+            raw_starting_stacks=(1000,) * len(players),  # Initial stacks
+            player_count=len(players),  # Number of players
+            mode=Mode.TOURNAMENT,  # Tournament mode
+        )
+
+        # Initialize game variables
+        self.hands = {}  # Store player hands
         self.current_turn = 0
         self.bets = {player: 0 for player in players}
-        self.spectators = []  # Placeholder for up to 3 spectators
+
+        # Deal hands to players
+        self.deal_hands()
 
     def deal_hands(self):
-        self.deck.shuffle()
-        for player in self.players:
-            self.hands[player] = Hand(self.deck.draw(2))
-        return self.hands
+        """Deal 2 random cards to each player."""
+        used_cards = set()  # Track used cards to avoid duplicates
 
-    def deal_community_cards(self, count):
-        for _ in range(count):
-            self.community_cards.append(self.deck.draw(1)[0])
-        return self.community_cards
-
-    def evaluate_hands(self):
-        scores = {}
-        for player, hand in self.hands.items():
-            combined_cards = hand.cards + self.community_cards
-            scores[player] = calculate_hand_strength(combined_cards)
-        return scores
-
-    def next_turn(self):
-        self.current_turn = (self.current_turn + 1) % len(self.players)
-        return self.players[self.current_turn]
-
-    def determine_winner(self):
-        scores = self.evaluate_hands()
-        winner = max(scores, key=scores.get)
-        return winner, scores[winner]
-
-    def distribute_pot(self):
-        winner, score = self.determine_winner()
-        winnings = self.pot
-        self.pot = 0
-        return {"winner": winner, "score": score, "winnings": winnings}
+        for i, player in enumerate(self.players):
+            cards = []
+            while len(cards) < 2:
+                card = Card.random()
+                if card not in used_cards:  # Ensure no duplicates
+                    cards.append(card)
+                    used_cards.add(card)
+            self.hands[player] = self.state.deal_hole(cards)
 
 
 # API Endpoints
@@ -117,13 +124,23 @@ class PokerGame:
 def start_game():
     try:
         data = request.json
+        print(f"Received data: {data}")  # Log received data
+
         game_id = data['game_id']
         players = data['players']
+
+        # Log game creation
+        print(f"Initializing game with ID: {game_id} and players: {players}")
+
+        # Create PokerGame instance
         game = PokerGame(game_id, players)
         game.deal_hands()
         active_games[game_id] = game
+
         return jsonify({"message": "Game started.", "game_id": game_id})
+
     except Exception as e:
+        print(f"Error: {str(e)}")  # Log error details
         return jsonify({"error": str(e)}), 400
 
 
