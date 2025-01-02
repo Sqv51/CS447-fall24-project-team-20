@@ -6,13 +6,13 @@ import datetime
 import os
 from dotenv import load_dotenv
 import poker
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template
 
 # Load environment variables
 load_dotenv()
 
 # Firebase Configuration
-cred = credentials.Certificate("cs447-team20-poker-firebase-adminsdk-7i9j4-4ee3cdbe68.json")
+cred = credentials.Certificate("/Users/tugan_basaran/Desktop/Lessons/CS.447/Project/Server/cs447-team20-poker-firebase-adminsdk-7i9j4-4ee3cdbe68.json")
 firebase_admin.initialize_app(cred)
 db = firestore.client()
 
@@ -151,9 +151,13 @@ def player_action():
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
+@app.route('/')
+def index(): 
+    return render_template('index.html')
+
+@app.route('/register')
+def register_page():
+    return render_template('register.html')
 
 if __name__ == '__main__':
     app.run(debug=True)
-
-
-
