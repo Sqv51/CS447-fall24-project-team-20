@@ -1,5 +1,4 @@
 import random
-import threading
 import time
 from enum import Enum
 from treys import Card, Deck, Evaluator  # pip install treys for this to work
@@ -70,7 +69,7 @@ class PokerGame:
                 self.place_bet(player, max_bet - self.bets[player])
                 self.action_log.append(f"{player.name} called {max_bet}")
             else:
-                raise ValueError("Nothing to call.")
+                self.action_log.append(f"{player.name} checked")
         elif action == PokerGame.Moves.RAISE:
             if amount < self.minimum_raise or amount > player.balance:
                 raise ValueError("Invalid raise amount.")
@@ -80,9 +79,6 @@ class PokerGame:
             player.folded = True
             self.action_log.append(f"{player.name} folded")
         elif action == PokerGame.Moves.CHECK:
-            max_bet = max(self.bets.values())
-            if self.bets[player] < max_bet:
-                raise ValueError("Cannot check, must call or fold.")
             self.action_log.append(f"{player.name} checked")
         else:
             raise ValueError("Invalid action.")
@@ -132,55 +128,49 @@ class PokerGame:
         winning_hand = scores[winner]
         winner.balance += self.pot
         self.action_log.append(f"{winner.name} wins the pot of {self.pot} with a score of {winning_hand}")
+        #display other players hands and scores who did not fold
+        for player, score in scores.items():
+            if player != winner:
+                self.action_log.append(f"{player.name} had a score of {score} and folded.")
+
+
         self.pot = 0
         return winner
 
+    def get_valid_actions(self, player):
+        max_bet = max(self.bets.values())
+        if self.bets[player] < max_bet:
+            return ['call', 'raise', 'fold']
+        else:
+            return ['check', 'bet', 'fold']
+
     def get_player_decision(self, player):
         decision = [None]
-        input_received = [False]
+        print(f"{player.name}, you have 60 seconds to decide.")
+        try:
+            print(f"Game State: {self.state.value}")
+            print(f"Pot: {self.pot}")
+            print(f"Blinds: Small Blind = {self.small_blind}, Big Blind = {self.big_blind}")
+            print("Community Cards:", [Card.int_to_str(c) for c in self.community_cards])
+            print(f"{player.name}'s balance: {player.balance}")
+            print(f"{player.name}'s cards: ", [Card.int_to_str(c) for c in self.hands[player]])
 
-        def timer_thread():
-            for i in range(60, 0, -1):
-                if input_received[0]:
-                    print("\r", end="")
-                    return
-                print(f"\rTime left: {i} seconds", end="")
-                time.sleep(1)
-            print("\n")
+            valid_actions = self.get_valid_actions(player)
+            print(f"Valid actions: {', '.join(valid_actions)}")
 
-        def input_thread():
-            try:
-                print(f"Game State: {self.state.value}")
-                print(f"Pot: {self.pot}")
-                print(f"Blinds: Small Blind = {self.small_blind}, Big Blind = {self.big_blind}")
-                print("Community Cards:", [Card.int_to_str(c) for c in self.community_cards])
-                print(f"{player.name}'s balance: {player.balance}")
-                print(f"{player.name}'s cards: ", [Card.int_to_str(c) for c in self.hands[player]])
-                user_input = input(f"{player.name}, enter your action (bet, call, raise, fold, check): ").strip().lower()
-                if user_input.startswith('bet') or user_input.startswith('raise'):
-                    parts = user_input.split()
-                    if len(parts) == 2 and parts[1].isdigit():
-                        decision[0] = (PokerGame.Moves[user_input.split()[0].upper()], int(parts[1]))
-                    else:
-                        decision[0] = (PokerGame.Moves.FOLD, 0)
-                elif user_input in ['call', 'fold', 'check']:
-                    decision[0] = (PokerGame.Moves[user_input.upper()], 0)
-                else:
-                    decision[0] = (PokerGame.Moves.FOLD, 0)
-                input_received[0] = True
-            except Exception:
-                decision[0] = (PokerGame.Moves.FOLD, 0)
-
-        timer = threading.Thread(target=timer_thread)
-        input_t = threading.Thread(target=input_thread)
-        timer.start()
-        input_t.start()
-        input_t.join(timeout=60)
-
-        if not input_received[0]:
-            print(f"{player.name} took too long. Default action: fold.")
-            return PokerGame.Moves.FOLD, 0
-        return decision[0]
+            while True:
+                user_input = input(f"{player.name}, enter your action ({', '.join(valid_actions)}): ").strip().lower()
+                if user_input in valid_actions or any(user_input.startswith(v) for v in ['bet', 'raise']):
+                    break
+                print("Invalid input. Try again.")
+            if user_input.startswith('bet') or user_input.startswith('raise'):
+                parts = user_input.split()
+                decision = (PokerGame.Moves[parts[0].upper()], int(parts[1])) if len(parts) == 2 and parts[1].isdigit() else (PokerGame.Moves.FOLD, 0)
+            else:
+                decision = (PokerGame.Moves[user_input.upper()], 0)
+        except Exception:
+            decision = (PokerGame.Moves.FOLD, 0)
+        return decision
 
     def play(self):
         while len([p for p in self.players if not p.folded]) > 1:
@@ -197,6 +187,9 @@ class PokerGame:
             self.turn += 1
             if self.turn % len(self.players) == 0:
                 self.next_stage()
+            if self.state == PokerGame.GameState.SHOWDOWN:
+                break
+
         winner = self.get_winner()
         print("\nGame Summary:")
         for log in self.action_log:
