@@ -4,6 +4,8 @@ from enum import Enum
 from treys import Card, Deck, Evaluator  # pip install treys for this to work
 
 
+
+
 class Player:
     def __init__(self, name, balance):
         self.name = name
@@ -53,6 +55,7 @@ class PokerGame:
 
     def deal_community(self, count):
         self.community_cards.extend(self.deck.draw(count))
+        self.action_log.append(f"Dealt {count} community cards: {[Card.int_to_str(c) for c in self.community_cards]}")
 
     def player_action(self, player, action, amount=0):
         if player.folded:
@@ -98,6 +101,7 @@ class PokerGame:
         player.balance -= amount
         self.bets[player] += amount
         self.pot += amount
+        self.action_log.append(f"{player.name} placed a bet of {amount}. Pot is now {self.pot}")
 
     def next_stage(self):
         if len([p for p in self.players if not p.folded]) == 1:
@@ -105,14 +109,18 @@ class PokerGame:
         if self.state == PokerGame.GameState.PRE_FLOP:
             self.deal_community(3)
             self.state = PokerGame.GameState.FLOP
+            self.action_log.append("Transitioned to FLOP stage")
         elif self.state == PokerGame.GameState.FLOP:
             self.deal_community(1)
             self.state = PokerGame.GameState.TURN
+            self.action_log.append("Transitioned to TURN stage")
         elif self.state == PokerGame.GameState.TURN:
             self.deal_community(1)
             self.state = PokerGame.GameState.RIVER
+            self.action_log.append("Transitioned to RIVER stage")
         elif self.state == PokerGame.GameState.RIVER:
             self.state = PokerGame.GameState.SHOWDOWN
+            self.action_log.append("Transitioned to SHOWDOWN stage")
 
     def get_winner(self):
         active_players = [p for p in self.players if not p.folded]
@@ -120,6 +128,7 @@ class PokerGame:
             winner = active_players[0]
             winner.balance += self.pot
             self.action_log.append(f"{winner.name} wins the pot of {self.pot} by default (all others folded)")
+            print(f"{winner.name} wins the pot of {self.pot}.")
             self.pot = 0
             return winner
 
@@ -128,11 +137,10 @@ class PokerGame:
         winning_hand = scores[winner]
         winner.balance += self.pot
         self.action_log.append(f"{winner.name} wins the pot of {self.pot} with a score of {winning_hand}")
-        #display other players hands and scores who did not fold
+        # display other players hands and scores who did not win
         for player, score in scores.items():
             if player != winner:
-                self.action_log.append(f"{player.name} had a score of {score} and folded.")
-
+                self.action_log.append(f"{player.name} had a score of {score} and did not win.")
 
         self.pot = 0
         return winner
@@ -194,7 +202,6 @@ class PokerGame:
         print("\nGame Summary:")
         for log in self.action_log:
             print(log)
-        print(f"{winner.name} wins the pot of {self.pot}.")
         print(f"{winner.name}'s balance is now {winner.balance}.")
         print("Game Over.")
 
