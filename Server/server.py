@@ -22,7 +22,21 @@ SECRET_KEY = os.getenv('SECRET_KEY')
 app = Flask(__name__)
 
 # Global Variables
-active_games = {}  # Temporary storage for games
+active_tables = {}
+
+
+
+class Table:
+    def __init__(self, table_id, players):
+        self.table_id = table_id
+        self.players = players
+        self.game = None
+
+    def start_game(self):
+        self.game = poker.PokerGame(self.table_id, self.players, 1000)
+
+
+
 
 
 # User Authentication Endpoints
@@ -58,7 +72,24 @@ def login_user():
 
 
 
+
 # API Endpoints
+
+#Api endpoint to get info and current tables(games)
+@app.route('/api/tables', methods=['GET'])
+def get_tables():
+    try:
+        tables = db.collection('tables').get()
+        tables_data = []
+        for table in tables:
+            tables_data.append(table.to_dict())
+        return jsonify(tables_data)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+
+
+
 @app.route('/api/game/start', methods=['POST'])
 def start_game():
     try:

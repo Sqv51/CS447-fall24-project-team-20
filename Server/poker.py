@@ -59,7 +59,10 @@ class PokerGame:
             self.place_bet(player, amount)
         elif action == PokerGame.Moves.CALL:
             max_bet = max(self.bets.values())
-            self.place_bet(player, max_bet - self.bets[player])
+            if self.bets[player] < max_bet:
+                self.place_bet(player, max_bet - self.bets[player])
+            else:
+                raise ValueError("Nothing to call.")
         elif action == PokerGame.Moves.RAISE:
             if amount < self.minimum_raise or amount > player.balance:
                 raise ValueError("Invalid raise amount.")
@@ -67,7 +70,9 @@ class PokerGame:
         elif action == PokerGame.Moves.FOLD:
             self.players.remove(player)
         elif action == PokerGame.Moves.CHECK:
-            pass
+            max_bet = max(self.bets.values())
+            if self.bets[player] < max_bet:
+                raise ValueError("Cannot check, must call or fold.")
         else:
             raise ValueError("Invalid action.")
 
@@ -87,6 +92,8 @@ class PokerGame:
         self.pot += amount
 
     def next_stage(self):
+        if len(self.players) == 1:
+            return
         if self.state == PokerGame.GameState.PRE_FLOP:
             self.deal_community(3)
             self.state = PokerGame.GameState.FLOP
@@ -100,6 +107,12 @@ class PokerGame:
             self.state = PokerGame.GameState.SHOWDOWN
 
     def get_winner(self):
+        if len(self.players) == 1:
+            winner = self.players[0]
+            winner.balance += self.pot
+            self.pot = 0
+            return winner
+
         scores = self.evaluate()
         winner = min(scores, key=scores.get)
         winner.balance += self.pot
@@ -111,34 +124,35 @@ class PokerGame:
 
         def input_thread():
             try:
-                while decision[0] is None:
-                    print(f"Game State: {self.state.value}")
-                    print(f"Pot: {self.pot}")
-                    print(f"Blinds: Small Blind = {self.small_blind}, Big Blind = {self.big_blind}")
-                    print("Community Cards:", [Card.int_to_str(c) for c in self.community_cards])
-                    print(f"{player.name}'s balance: {player.balance}")
-                    print("Other Players:")
-                    for p in self.players:
-                        if p != player:
-                            print(f"{p.name} - Bet: {self.bets[p]}, Balance: {p.balance}")
-                    print(f"{player.name}'s cards: ", [Card.int_to_str(c) for c in self.hands[player]])
+                # Display game state once before asking input
+                print(f"Game State: {self.state.value}")
+                print(f"Pot: {self.pot}")
+                print(f"Blinds: Small Blind = {self.small_blind}, Big Blind = {self.big_blind}")
+                print("Community Cards:", [Card.int_to_str(c) for c in self.community_cards])
+                print(f"{player.name}'s balance: {player.balance}")
+                print("Other Players:")
+                for p in self.players:
+                    if p != player:
+                        print(f"{p.name} - Bet: {self.bets[p]}, Balance: {p.balance}")
+                print(f"{player.name}'s cards: ", [Card.int_to_str(c) for c in self.hands[player]])
 
-                    # Countdown timer
-                    for i in range(10, 0, -1):
-                        print(f"Time left: {i} seconds", end='\r')
-                        time.sleep(1)
+                # Countdown timer
+                for i in range(10, 0, -1):
+                    print(f"Time left: {i} seconds", end='\r')
+                    time.sleep(1)
 
-                    user_input = input(f"{player.name}, enter your action (bet, call, raise, fold, check): ").strip().lower()
-                    if user_input.startswith('bet') or user_input.startswith('raise'):
-                        parts = user_input.split()
-                        if len(parts) == 2 and parts[1].isdigit():
-                            decision[0] = (PokerGame.Moves[user_input.split()[0].upper()], int(parts[1]))
-                        else:
-                            print("Invalid input. Try again.")
-                    elif user_input in ['call', 'fold', 'check']:
-                        decision[0] = (PokerGame.Moves[user_input.upper()], 0)
+                # Collect user input
+                user_input = input(f"{player.name}, enter your action (bet, call, raise, fold, check): ").strip().lower()
+                if user_input.startswith('bet') or user_input.startswith('raise'):
+                    parts = user_input.split()
+                    if len(parts) == 2 and parts[1].isdigit():
+                        decision[0] = (PokerGame.Moves[user_input.split()[0].upper()], int(parts[1]))
                     else:
-                        print("Invalid input. Try again.")
+                        decision[0] = (PokerGame.Moves.FOLD, 0)
+                elif user_input in ['call', 'fold', 'check']:
+                    decision[0] = (PokerGame.Moves[user_input.upper()], 0)
+                else:
+                    decision[0] = (PokerGame.Moves.FOLD, 0)
             except Exception:
                 decision[0] = (PokerGame.Moves.FOLD, 0)
 
@@ -160,10 +174,11 @@ class PokerGame:
                 self.player_action(player, action, amount)
             except ValueError as e:
                 print(e)
+            if len(self.players) == 1:
+                break
             self.turn += 1
             if self.turn % len(self.players) == 0:
                 self.next_stage()
-        self.next_stage()
         winner = self.get_winner()
         print(f"{winner.name} wins the pot of {self.pot}.")
         print(f"{winner.name}'s balance is now {winner.balance}.")
