@@ -1,0 +1,12 @@
+body{
+    font-family: sans-serif;
+}
+
+table.content {
+    margin-right: auto;
+    margin-left: auto; 
+}
+
+h1 {
+    text-align: center;
+}

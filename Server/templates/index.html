@@ -1,0 +1,23 @@
+{% extends 'base.html' %}
+
+{% block head %} 
+<title>Main Page</title>
+{% endblock %}
+
+{% block body %}
+<h1>Welcome to Poker</h1>
+<p>This poker game is made by students from Özyeğin University.</p>
+
+<form action="/api/auth/login" method="POST">
+    <label for="username">Enter Username:</label>
+    <input type="text" id="username" name="username">
+    <br>
+    <label for="password">Enter Password:</label>
+    <input type="password" id="password" name="password">
+    <br>
+    <input type="submit" value="Login">
+</form>
+<br>
+<h3>If you don't have an account, register here!</h3>
+<a href="/register" style="font-size: larger;">Register</a>
+{% endblock %}
