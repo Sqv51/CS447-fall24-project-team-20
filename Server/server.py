@@ -12,7 +12,7 @@ from flask import Flask, request, jsonify, render_template
 load_dotenv()
 
 # Firebase Configuration
-cred = credentials.Certificate("/Users/tugan_basaran/Desktop/Lessons/CS.447/Project/Server/cs447-team20-poker-firebase-adminsdk-7i9j4-4ee3cdbe68.json")
+cred = credentials.Certificate("Server/cs447-team20-poker-firebase-adminsdk-7i9j4-4ee3cdbe68.json")
 firebase_admin.initialize_app(cred)
 db = firestore.client()
 
