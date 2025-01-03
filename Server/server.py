@@ -23,17 +23,63 @@ app = Flask(__name__)
 
 # Global Variables
 active_tables = {}
+max_tables = 10
 
 
 
 class Table:
-    def __init__(self, table_id, players):
+
+    maxplayers = 9
+    maxpsec = 3
+
+    enum = {
+    "waiting for players": 0,
+    "game in progress": 1,
+    "game over": 2
+    }
+
+
+    players = []
+    spectators = []
+    starting_chips = 10000
+    def __init__(self, table_id, initial_player):
         self.table_id = table_id
-        self.players = players
+        self.add_player(initial_player)
+        self.spectators = []
         self.game = None
+        self.status = Table.enum["waiting for players"]
+
+
+    def get_table_info(self):
+        return {"table_id": self.table_id, "players": self.players}
+
+    def add_player(self, player):
+        if len(self.players) < Table.maxplayers:
+            self.players.append(player)
+        else:
+            raise ValueError("Table is full.")
+
+    def remove_player(self, player):
+        if player in self.players:
+            self.players.remove(player)
+        else:
+            raise ValueError("Player not found.")
+
+    def add_spec(self, spec):
+        if len(self.spectators) < Table.maxplayers:
+            self.spectators.append(spec)
+
+    def remove_spec(self, spec):
+        if spec in self.spectators:
+            self.spectators.remove(spec)
+        else:
+            raise ValueError("Spectator not found.")
+
+    def set_starting_chips(self, chips):
+        self.starting_chips = chips
 
     def start_game(self):
-        self.game = poker.PokerGame(self.table_id, self.players, 1000)
+        self.game = poker.PokerGame(self.table_id)
 
 
 
@@ -100,9 +146,9 @@ def start_game():
         if len(players) < 2 or len(players) > 9:
             return jsonify({"error": "Invalid number of players."}), 400
 
-        game = poker.PokerGame(game_id, players, starting_chips)
+        game = poker.PokerGame(game_id)
         game.deal_hands()
-        active_games[game_id] = game
+        active_tables[game_id] = game
         return jsonify({"message": "Game started.", "game_id": game_id})
     except Exception as e:
         return jsonify({"error": str(e)}), 400
@@ -117,10 +163,10 @@ def player_action():
         action = data['action']
         amount = data.get('amount', 0)
 
-        if game_id not in active_games:
+        if game_id not in active_tables:
             return jsonify({"error": "Game not found."}), 404
 
-        game = active_games[game_id]
+        game = active_tables[game_id]
         if player not in game.players:
             return jsonify({"error": "Player not in game."}), 403
 
@@ -160,4 +206,5 @@ def register_page():
     return render_template('register.html')
 
 if __name__ == '__main__':
+    #handle active tables and games one by one
     app.run(debug=True)
