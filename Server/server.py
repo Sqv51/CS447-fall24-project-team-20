@@ -5,7 +5,7 @@ import jwt
 import datetime
 import os
 from dotenv import load_dotenv
-import table
+import poker
 from flask import Flask, request, jsonify, render_template
 
 # Load environment variables
@@ -22,6 +22,11 @@ SECRET_KEY = os.getenv('SECRET_KEY')
 app = Flask(__name__)
 
 
+#enum server state for the game
+class ServerState(Enum):
+    WAITING = 'waiting'
+    RUNNING = 'running'
+    FINISHED = 'finished'
 
 # User Authentication Endpoints
 @app.route('/api/auth/register', methods=['POST'])
@@ -54,22 +59,17 @@ def login_user():
         return jsonify({"error": str(e)}), 400
 
 
+@app.route('/')
+def index(): 
+    return render_template('index.html')
+
+@app.route('/register')
+def register_page():
+    return render_template('register.html')
 
 
 
-# API Endpoints
 
-#Api endpoint to get info and current tables(games)
-@app.route('/api/tables', methods=['GET'])
-def get_tables():
-    try:
-        tables = db.collection('tables').get()
-        tables_data = []
-        for table in tables:
-            tables_data.append(table.to_dict())
-        return jsonify(tables_data)
-    except Exception as e:
-        return jsonify({"error": str(e)}), 400
 
 
 
@@ -135,14 +135,8 @@ def player_action():
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
-@app.route('/')
-def index(): 
-    return render_template('index.html')
-
-@app.route('/register')
-def register_page():
-    return render_template('register.html')
 
 if __name__ == '__main__':
-    #handle active tables and games one by one
     app.run(debug=True)
+    
+    
