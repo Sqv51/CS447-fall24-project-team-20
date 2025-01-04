@@ -35,7 +35,7 @@ async function register(event){
     const result = await response.json();
     if(response.ok) {
         alert(result.message);
-        window.location.href = '/';
+        window.location.href = '/login.html';
     } else {
         alert(result.error);
         window.location.href = '/register.html';

@@ -23,15 +23,21 @@ app = Flask(__name__)
 
 
 
-# User Authentication Endpoints
 @app.route('/api/auth/register', methods=['POST'])
 def register_user():
     try:
         data = request.json
         email = data['email']
         password = data['password']
-        hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
-        return jsonify({"user_id": "mock_id", "message": "User registered successfully."})
+        user = auth.create_user(email=email, password=password)
+        
+        # Kullanıcı bilgilerini Firestore'a kaydet
+        db.collection('users').document(user.uid).set({
+            'email': email,
+            'password': password  # Şifreyi hashleyerek saklamanız önerilir
+        })
+        
+        return jsonify({"user_id": user.uid, "message": "User registered successfully."})
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
@@ -42,19 +48,18 @@ def login_user():
         data = request.json
         email = data['email']
         password = data['password']
-        user_data = {"email": email,
-                     "password": bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')}
-        if not bcrypt.checkpw(password.encode('utf-8'), user_data['password'].encode('utf-8')):
+        user = auth.get_user_by_email(email)
+        
+        # Firebase Authentication'da şifre doğrulama işlemi yoktur, bu yüzden kendi doğrulama yöntemimizi kullanıyoruz
+        user_data = db.collection('users').document(user.uid).get().to_dict()
+        if user_data['password'] != password:
             return jsonify({"error": "Invalid password."}), 401
 
-        token = jwt.encode({'user_id': "mock_id", 'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=1)},
+        token = jwt.encode({'user_id': user.uid, 'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=1)},
                            SECRET_KEY, algorithm='HS256')
-        return jsonify({"user_id": "mock_id", "token": token, "message": "Login successful."})
+        return jsonify({"user_id": user.uid, "token": token, "message": "Login successful."})
     except Exception as e:
         return jsonify({"error": str(e)}), 400
-
-
-
 
 
 # API Endpoints
@@ -137,12 +142,17 @@ def player_action():
 
 @app.route('/')
 def index(): 
-    return render_template('index.html')
+    return render_template('login.html')
 
 @app.route('/register')
 def register_page():
     return render_template('register.html')
 
+@app.route('/main_page')
+def main_page():
+    return render_template('main_page.html')
+
+
 if __name__ == '__main__':
     #handle active tables and games one by one
-    app.run(debug=True)
+    app.run(debug=True, port=8080)
