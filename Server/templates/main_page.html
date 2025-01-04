@@ -17,4 +17,12 @@
 
 <button id="ready">Ready</button>
 <h1>MAIN PAGE TO BE COMPLETED</h1>
+
+<script src="{{ url_for('static', filename='script.js') }}"></script>
+<script>
+    document.getElementById('ready').addEventListener('click', function() {
+        const username = localStorage.getItem('username'); // Assuming username is stored in localStorage
+        socket.emit('ready', { room: 'game_room_1', username: username });
+    });
+</script>
 {% endblock %}
