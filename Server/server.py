@@ -5,8 +5,9 @@ import jwt
 import datetime
 import os
 from dotenv import load_dotenv
-import table
 from flask import Flask, request, jsonify, render_template
+from flask_socketio import SocketIO, emit, join_room, leave_room
+from enum import Enum
 
 # Load environment variables
 load_dotenv()
@@ -19,9 +20,18 @@ db = firestore.client()
 # JWT Secret Key
 SECRET_KEY = os.getenv('SECRET_KEY')
 
+# Initialize Flask and SocketIO
 app = Flask(__name__)
+socketio = SocketIO(app, cors_allowed_origins="*")
 
+# Player slots list of player objects and their state
+player_slots = []
 
+# Enum server state for the game
+class ServerState(Enum):
+    WAITING = 'waiting'
+    RUNNING = 'running'
+    FINISHED = 'finished'
 
 @app.route('/api/auth/register', methods=['POST'])
 def register_user():
@@ -40,7 +50,6 @@ def register_user():
         return jsonify({"user_id": user.uid, "message": "User registered successfully."})
     except Exception as e:
         return jsonify({"error": str(e)}), 400
-
 
 @app.route('/api/auth/login', methods=['POST'])
 def login_user():
@@ -61,44 +70,37 @@ def login_user():
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
+@app.route('/')
+def index(): 
+    return render_template('index.html')
 
-# API Endpoints
+@app.route('/register')
+def register_page():
+    return render_template('register.html')
 
-#Api endpoint to get info and current tables(games)
-@app.route('/api/tables', methods=['GET'])
-def get_tables():
-    try:
-        tables = db.collection('tables').get()
-        tables_data = []
-        for table in tables:
-            tables_data.append(table.to_dict())
-        return jsonify(tables_data)
-    except Exception as e:
-        return jsonify({"error": str(e)}), 400
+# WebSocket Events
+@socketio.on('join')
+def handle_join(data):
+    room = data['room']
+    join_room(room)
+    emit('message', {'msg': f"{data['username']} has joined the room."}, room=room)
 
+@socketio.on('action')
+def handle_action(data):
+    room = data['room']
+    action = data['action']
+    amount = data.get('amount', 0)
 
+    # Broadcast action to all clients in the room
+    emit('game_update', {'action': action, 'amount': amount}, room=room)
 
+@socketio.on('disconnect')
+def handle_disconnect():
+    emit('message', {'msg': 'A player has disconnected.'}, broadcast=True)
 
-@app.route('/api/game/start', methods=['POST'])
-def start_game():
-    try:
-        data = request.json
-        game_id = data['game_id']
-        players = data['players']
-        starting_chips = 1000  # Tournament-style chips
-        if len(players) < 2 or len(players) > 9:
-            return jsonify({"error": "Invalid number of players."}), 400
-
-        game = poker.PokerGame(game_id)
-        game.deal_hands()
-        active_tables[game_id] = game
-        return jsonify({"message": "Game started.", "game_id": game_id})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 400
-
-
+# Game Actions Endpoint (Fallback for HTTP)
 @app.route('/api/game/action', methods=['POST'])
-def player_action():
+def game_action():
     try:
         data = request.json
         game_id = data['game_id']
@@ -106,35 +108,14 @@ def player_action():
         action = data['action']
         amount = data.get('amount', 0)
 
-        if game_id not in active_tables:
-            return jsonify({"error": "Game not found."}), 404
-
-        game = active_tables[game_id]
-        if player not in game.players:
-            return jsonify({"error": "Player not in game."}), 403
-
+        # Example: Update actions in the database
         if action == "bet":
-            if amount < game.blind_level:
+            if amount < 10:  # Replace 10 with your blind level logic
                 return jsonify({"error": "Bet below blind level."}), 400
-            game.bets[player] += amount
-            game.pot += amount
         elif action == "fold":
-            del game.players[player]
-            if len(game.players) == 1:
-                result = game.distribute_pot()
-                return jsonify({
-                                   "message": f"{result['winner']} wins the pot of {result['winnings']} with score {result['score']}."})
-        elif action == "call":
-            max_bet = max(game.bets.values())
-            game.bets[player] = max_bet
-            game.pot += max_bet
-        elif action == "raise":
-            game.bets[player] += amount
-            game.pot += amount
-        else:
-            return jsonify({"error": "Invalid action."}), 400
+            # Handle fold logic
+            pass
 
-        game.increment_blinds()  # Increment blinds after each round
         return jsonify({"message": "Action completed."})
 
     except Exception as e:
@@ -154,5 +135,4 @@ def main_page():
 
 
 if __name__ == '__main__':
-    #handle active tables and games one by one
-    app.run(debug=True, port=8080)
+    socketio.run(app, debug=True, port=8080)
