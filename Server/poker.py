@@ -7,7 +7,11 @@ from flask import jsonify
 
 class Player:
 
-    
+    class PlayerState(Enum):
+        CONNECTING = 'connecting'
+        CONNECTED = 'connected'
+        READY = 'ready'
+        BANKRUPT = 'bankrupt'
 
 
     def __init__(self, name, balance):
@@ -88,16 +92,15 @@ class PokerGame:
             if amount < self.minimum_raise or amount > player.balance:
                 raise ValueError("Invalid bet amount.")
             self.place_bet(player, amount)
-        elif action == PokerGame.Moves.CALL:
-            max_bet = max(self.bets.values())
-            if self.bets[player] < max_bet:
-                self.place_bet(player, max_bet - self.bets[player])
-        elif action == PokerGame.Moves.RAISE:
-            if amount < self.minimum_raise or amount > player.balance:
-                raise ValueError("Invalid raise amount.")
-            self.place_bet(player, amount)
         elif action == PokerGame.Moves.FOLD:
             player.folded = True
+
+    # Broadcast state after each action
+    socketio.emit('game_update', self.send_game_info())
+
+
+    # Broadcast state after each action
+    socketio.emit('game_update', self.send_game_info())
 
     def distribute_pot(self):
         active_players = [p for p in self.players if not p.folded]
