@@ -28,7 +28,7 @@ socketio = SocketIO(app, cors_allowed_origins="*")
 
 # Player slots list of player objects and their state
 player_slots = []
-ready_players = []
+player_status = {}
 
 # Countdown function
 def start_countdown(room):
@@ -50,13 +50,24 @@ def start_poker_game(room):
 
 @socketio.on('ready')
 def handle_ready(data):
+    global player_status
     room = data['room']
     username = data['username']
-    ready_players.append({'username': username, 'room': room})
+
+    # Update player status to ready
+    player_status[username] = {'room': room, 'ready': True}
+
+    # Notify others about readiness
     emit('message', {'msg': f"{username} is ready."}, room=room)
 
-    if len([player for player in ready_players if player['room'] == room]) >= 2:
+    # Broadcast updated player statuses
+    emit('player_status', player_status, room=room)
+
+    # Start countdown when at least 2 players are ready
+    ready_count = sum(1 for p in player_status.values() if p['room'] == room and p['ready'])
+    if ready_count >= 2:
         threading.Thread(target=start_countdown, args=(room,)).start()
+
 
 # Enum server state for the game
 class ServerState(Enum):
@@ -105,8 +116,16 @@ def login_user():
 @socketio.on('join')
 def handle_join(data):
     room = data['room']
+    username = data['username']
     join_room(room)
-    emit('message', {'msg': f"{data['username']} has joined the room."}, room=room)
+
+    # Initialize player status if not already present
+    if username not in player_status:
+        player_status[username] = {'room': room, 'ready': False}
+
+    # Notify about join event and send player statuses
+    emit('message', {'msg': f"{username} has joined the room."}, room=room)
+    emit('player_status', player_status, room=room)
 
 @socketio.on('leave')
 def handle_leave(data):

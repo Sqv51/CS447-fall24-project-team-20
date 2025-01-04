@@ -9,12 +9,12 @@
 <p>This poker game is made by students from Özyeğin University.</p>
 <br>
 
-<ol id="current_logged_in_users">
-{% for user in current_logged_in_users %}
-<li>{{user.email}}</li>
-{% endfor %}
-</ol>
+<ul id="player-list"></ul>
 
+
+  
+
+<input type="text" id="username" placeholder="Enter your username">
 <button id="ready">Ready</button>
 <h1>MAIN PAGE TO BE COMPLETED</h1>
 
@@ -24,7 +24,7 @@
 <script src="{{ url_for('static', filename='script.js') }}"></script>
 <script>
     document.getElementById('ready').addEventListener('click', function() {
-        const username = localStorage.getItem('username'); // Assuming username is stored in localStorage
+        const username = document.getElementById('username').value;
         socket.emit('ready', { room: 'game_room_1', username: username });
     });
 
@@ -34,5 +34,9 @@
             document.getElementById('countdown').innerText = data.msg;
         }
     });
+    function setReady() {
+    const username = localStorage.getItem("username");
+    socket.emit("ready", { room: "game_room_1", username: username });
+  }
 </script>
 {% endblock %}

@@ -1,5 +1,23 @@
 const socket = io.connect("http://192.168.196.52:5000");
 
+
+const playerListElement = document.getElementById("player-list");
+
+socket.on("player_status", (status) => {
+  playerListElement.innerHTML = ""; // Clear list
+  for (const [player, data] of Object.entries(status)) {
+    const playerItem = document.createElement("li");
+    playerItem.textContent = `${player} - ${data.ready ? "Ready ✅" : "Not Ready ❌"}`;
+    if (data.ready) {
+      playerItem.style.color = "green";
+    } else {
+      playerItem.style.color = "red";
+    }
+    playerListElement.appendChild(playerItem);
+  }
+});
+
+
 socket.on("connect", () => {
   console.log("Connected to WebSocket server.");
   socket.emit("join", { room: "game_room_1", username: "Player1" });
