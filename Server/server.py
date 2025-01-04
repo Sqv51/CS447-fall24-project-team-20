@@ -1,126 +1,76 @@
-import firebase_admin
-from firebase_admin import credentials, firestore, auth
-import bcrypt
-import jwt
-import datetime
-import os
-from dotenv import load_dotenv
-from flask import Flask, request, jsonify, render_template
-from flask_socketio import SocketIO, emit, join_room, leave_room
-from enum import Enum
-import threading
-import time
+import socket
+from _thread import *
+import pickle
+from game import Game
 
-# Load environment variables
-load_dotenv()
+server = "192.168.196.52"
+port = 5555
 
-# Firebase Configuration
-cred = credentials.Certificate("Server/cs447-team20-poker-firebase-adminsdk-7i9j4-4ee3cdbe68.json")
-firebase_admin.initialize_app(cred)
-db = firestore.client()
+s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
-# JWT Secret Key
-SECRET_KEY = os.getenv('SECRET_KEY')
+try:
+    s.bind((server, port))
+except socket.error as e:
+    str(e)
 
-# Initialize Flask and SocketIO
-app = Flask(__name__)
-socketio = SocketIO(app, cors_allowed_origins="*")
+s.listen(2)
+print("Waiting for a connection, Server Started")
+
+connected = set()
+games = {}
+idCount = 0
 
 
-# Countdown function
-def start_countdown(room):
-    countdown = 120  # 120 seconds countdown
-    while countdown > 0:
-        socketio.emit('message', {'msg': f"Game starting in {countdown} seconds."}, room=room)
-        time.sleep(1)
-        print(countdown)
-        countdown -= 1
-    start_poker_game(room)
+def threaded_client(conn, p, gameId):
+    global idCount
+    conn.send(str.encode(str(p)))
 
+    reply = ""
+    while True:
+        try:
+            data = conn.recv(4096).decode()
 
-# Enum server state for the game
-class ServerState(Enum):
-    WAITING = 'waiting'
-    RUNNING = 'running'
-    FINISHED = 'finished'
+            if gameId in games:
+                game = games[gameId]
 
-@app.route('/api/auth/register', methods=['POST'])
-def register_user():
+                if not data:
+                    break
+                else:
+                    if data == "reset":
+                        game.resetWent()
+                    elif data != "get":
+                        game.play(p, data)
+
+                    conn.sendall(pickle.dumps(game))
+            else:
+                break
+        except:
+            break
+
+    print("Lost connection")
     try:
-        data = request.json
-        email = data['email']
-        password = data['password']
-        user = auth.create_user(email=email, password=password)
-        
-        # Save user info to Firestore
-        db.collection('users').document(user.uid).set({
-            'email': email,
-            'password': password  # It's recommended to hash the password
-        })
-        
-        return jsonify({"user_id": user.uid, "message": "User registered successfully."})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 400
-
-@app.route('/api/auth/login', methods=['POST'])
-def login_user():
-    try:
-        data = request.json
-        email = data['email']
-        password = data['password']
-        user = auth.get_user_by_email(email)
-        
-        # Firebase Authentication'da şifre doğrulama işlemi yoktur, bu yüzden kendi doğrulama yöntemimizi kullanıyoruz
-        user_data = db.collection('users').document(user.uid).get().to_dict()
-        if user_data['password'] != password:
-            return jsonify({"error": "Invalid password."}), 401
-
-        token = jwt.encode({'user_id': user.uid, 'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=1)},
-                           SECRET_KEY, algorithm='HS256')
-        return jsonify({"user_id": user.uid, "token": token, "message": "Login successful."})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 400
-
-# WebSocket Events
-@socketio.on('join')
-def handle_join(data):
-    room = data['room']
-    username = data['username']
-    join_room(room)
-
-    # Initialize player status if not already present
-    if username not in player_status:
-        player_status[username] = {'room': room, 'ready': False}
-
-    # Notify about join event and send player statuses
-    emit('message', {'msg': f"{username} has joined the room."}, room=room)
-    emit('player_status', player_status, room=room)
-
-@socketio.on('leave')
-def handle_leave(data):
-    room = data['room']
-    leave_room(room)
-    emit('message', {'msg': f"{data['username']} has left the room."}, room=room)
+        del games[gameId]
+        print("Closing Game", gameId)
+    except:
+        pass
+    idCount -= 1
+    conn.close()
 
 
 
-@socketio.on('disconnect')
-def handle_disconnect():
-    emit('message', {'msg': 'A player has disconnected.'}, broadcast=True)
+while True:
+    conn, addr = s.accept()
+    print("Connected to:", addr)
+
+    idCount += 1
+    p = 0
+    gameId = (idCount - 1)//2
+    if idCount % 2 == 1:
+        games[gameId] = Game(gameId)
+        print("Creating a new game...")
+    else:
+        games[gameId].ready = True
+        p = 1
 
 
-@app.route('/')
-def index(): 
-    return render_template('login.html')
-
-@app.route('/register')
-def register_page():
-    return render_template('register.html')
-
-@app.route('/main_page')
-def main_page():
-    return render_template('main_page.html')
-
-
-if __name__ == '__main__':
-    socketio.run(app, host='192.168.196.52', port=5000, debug=True)
+    start_new_thread(threaded_client, (conn, p, gameId))
