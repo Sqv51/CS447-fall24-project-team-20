@@ -99,8 +99,7 @@ class PokerGame:
     socketio.emit('game_update', self.send_game_info())
 
 
-    # Broadcast state after each action
-    socketio.emit('game_update', self.send_game_info())
+    
 
     def distribute_pot(self):
         active_players = [p for p in self.players if not p.folded]

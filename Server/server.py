@@ -163,4 +163,4 @@ def main_page():
 
 
 if __name__ == '__main__':
-    socketio.run(app, debug=True, port=8080)
+    socketio.run(app, host='192.168.196.52', port=5000, debug=True)

@@ -1,4 +1,5 @@
-const socket = io.connect('http://localhost:5000');
+const socket = io.connect('http://192.168.196.52:5000');
+
 
 socket.on('connect', () => {
     console.log('Connected to WebSocket server.');
