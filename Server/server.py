@@ -8,6 +8,8 @@ from dotenv import load_dotenv
 from flask import Flask, request, jsonify, render_template
 from flask_socketio import SocketIO, emit, join_room, leave_room
 from enum import Enum
+import threading
+import time
 
 # Load environment variables
 load_dotenv()
@@ -26,6 +28,34 @@ socketio = SocketIO(app, cors_allowed_origins="*")
 
 # Player slots list of player objects and their state
 player_slots = []
+ready_players = []
+
+# Countdown function
+def start_countdown(room):
+    countdown = 120  # 120 seconds countdown
+    while countdown > 0:
+        socketio.emit('message', {'msg': f"Game starting in {countdown} seconds."}, room=room)
+        time.sleep(1)
+        countdown -= 1
+    start_poker_game(room)
+
+# Start poker game function
+def start_poker_game(room):
+    global ready_players
+    players = [Player(player['username'], 1000) for player in ready_players if player['room'] == room]
+    game = PokerGame(players)
+    socketio.emit('game_update', {'msg': 'Game started!', 'action_log': game.action_log}, room=room)
+    ready_players = [player for player in ready_players if player['room'] != room]
+
+@socketio.on('ready')
+def handle_ready(data):
+    room = data['room']
+    username = data['username']
+    ready_players.append({'username': username, 'room': room})
+    emit('message', {'msg': f"{username} is ready."}, room=room)
+
+    if len([player for player in ready_players if player['room'] == room]) >= 2:
+        threading.Thread(target=start_countdown, args=(room,)).start()
 
 # Enum server state for the game
 class ServerState(Enum):
@@ -41,10 +71,10 @@ def register_user():
         password = data['password']
         user = auth.create_user(email=email, password=password)
         
-        # Kullanıcı bilgilerini Firestore'a kaydet
+        # Save user info to Firestore
         db.collection('users').document(user.uid).set({
             'email': email,
-            'password': password  # Şifreyi hashleyerek saklamanız önerilir
+            'password': password  # It's recommended to hash the password
         })
         
         return jsonify({"user_id": user.uid, "message": "User registered successfully."})
@@ -70,20 +100,18 @@ def login_user():
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
-@app.route('/')
-def index(): 
-    return render_template('index.html')
-
-@app.route('/register')
-def register_page():
-    return render_template('register.html')
-
 # WebSocket Events
 @socketio.on('join')
 def handle_join(data):
     room = data['room']
     join_room(room)
     emit('message', {'msg': f"{data['username']} has joined the room."}, room=room)
+
+@socketio.on('leave')
+def handle_leave(data):
+    room = data['room']
+    leave_room(room)
+    emit('message', {'msg': f"{data['username']} has left the room."}, room=room)
 
 @socketio.on('action')
 def handle_action(data):

@@ -5,8 +5,16 @@
 {% endblock %}
 
 {% block body %}
-<h1>Welcome to User</h1>
+<h1>Welcome to Texas Hold'em Poker</h1>
 <p>This poker game is made by students from Özyeğin University.</p>
 <br>
+
+<ol id="current_logged_in_users">
+{% for user in current_logged_in_users %}
+<li>{{user.email}}</li>
+{% endfor %}
+</ol>
+
+<button id="ready">Ready</button>
 <h1>MAIN PAGE TO BE COMPLETED</h1>
 {% endblock %}
