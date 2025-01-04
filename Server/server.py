@@ -36,6 +36,7 @@ def start_countdown(room):
     while countdown > 0:
         socketio.emit('message', {'msg': f"Game starting in {countdown} seconds."}, room=room)
         time.sleep(1)
+        print(countdown)
         countdown -= 1
     start_poker_game(room)
 
