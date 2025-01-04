@@ -12,6 +12,9 @@ socket.on("game_update", (data) => {
 
 socket.on("message", (data) => {
   console.log(data.msg);
+  if (data.msg.includes("Game starting in")) {
+    document.getElementById("countdown").innerText = data.msg;
+  }
 });
 
 function sendAction(action, amount = 0) {

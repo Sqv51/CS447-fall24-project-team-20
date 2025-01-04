@@ -18,11 +18,21 @@
 <button id="ready">Ready</button>
 <h1>MAIN PAGE TO BE COMPLETED</h1>
 
+<!-- Countdown display -->
+<h2 id="countdown"></h2>
+
 <script src="{{ url_for('static', filename='script.js') }}"></script>
 <script>
     document.getElementById('ready').addEventListener('click', function() {
         const username = localStorage.getItem('username'); // Assuming username is stored in localStorage
         socket.emit('ready', { room: 'game_room_1', username: username });
+    });
+
+    // Listen for countdown messages from the server
+    socket.on('message', function(data) {
+        if (data.msg.includes('Game starting in')) {
+            document.getElementById('countdown').innerText = data.msg;
+        }
     });
 </script>
 {% endblock %}
