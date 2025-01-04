@@ -26,9 +26,6 @@ SECRET_KEY = os.getenv('SECRET_KEY')
 app = Flask(__name__)
 socketio = SocketIO(app, cors_allowed_origins="*")
 
-# Player slots list of player objects and their state
-player_slots = []
-player_status = {}
 
 # Countdown function
 def start_countdown(room):
@@ -39,34 +36,6 @@ def start_countdown(room):
         print(countdown)
         countdown -= 1
     start_poker_game(room)
-
-# Start poker game function
-def start_poker_game(room):
-    global ready_players
-    players = [Player(player['username'], 1000) for player in ready_players if player['room'] == room]
-    game = PokerGame(players)
-    socketio.emit('game_update', {'msg': 'Game started!', 'action_log': game.action_log}, room=room)
-    ready_players = [player for player in ready_players if player['room'] != room]
-
-@socketio.on('ready')
-def handle_ready(data):
-    global player_status
-    room = data['room']
-    username = data['username']
-
-    # Update player status to ready
-    player_status[username] = {'room': room, 'ready': True}
-
-    # Notify others about readiness
-    emit('message', {'msg': f"{username} is ready."}, room=room)
-
-    # Broadcast updated player statuses
-    emit('player_status', player_status, room=room)
-
-    # Start countdown when at least 2 players are ready
-    ready_count = sum(1 for p in player_status.values() if p['room'] == room and p['ready'])
-    if ready_count >= 2:
-        threading.Thread(target=start_countdown, args=(room,)).start()
 
 
 # Enum server state for the game
@@ -133,41 +102,12 @@ def handle_leave(data):
     leave_room(room)
     emit('message', {'msg': f"{data['username']} has left the room."}, room=room)
 
-@socketio.on('action')
-def handle_action(data):
-    room = data['room']
-    action = data['action']
-    amount = data.get('amount', 0)
 
-    # Broadcast action to all clients in the room
-    emit('game_update', {'action': action, 'amount': amount}, room=room)
 
 @socketio.on('disconnect')
 def handle_disconnect():
     emit('message', {'msg': 'A player has disconnected.'}, broadcast=True)
 
-# Game Actions Endpoint (Fallback for HTTP)
-@app.route('/api/game/action', methods=['POST'])
-def game_action():
-    try:
-        data = request.json
-        game_id = data['game_id']
-        player = data['player']
-        action = data['action']
-        amount = data.get('amount', 0)
-
-        # Example: Update actions in the database
-        if action == "bet":
-            if amount < 10:  # Replace 10 with your blind level logic
-                return jsonify({"error": "Bet below blind level."}), 400
-        elif action == "fold":
-            # Handle fold logic
-            pass
-
-        return jsonify({"message": "Action completed."})
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 400
 
 @app.route('/')
 def index(): 
