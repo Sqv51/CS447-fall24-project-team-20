@@ -2,6 +2,7 @@ import pygame
 from network import Network
 import pickle
 pygame.font.init()
+import game
 
 width = 700
 height = 700
@@ -90,13 +91,15 @@ def main():
     print("You are player", player)
 
     while run:
-        clock.tick(60)
+        #wait for the server to send the game
+        clock.tick(60) #this is the frame rate of the game
+
         try:
             game = n.send("get")
+
         except:
-            run = False
-            print("Couldn't get game")
-            break
+            game = n.send("get")
+            pass
 
         if game.bothWent():
             redrawWindow(win, game, player)
