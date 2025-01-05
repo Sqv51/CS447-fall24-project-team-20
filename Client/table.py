@@ -10,7 +10,7 @@ screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 pygame.display.set_caption("Poker Game")
 
 
-table_image = pygame.image.load("poker_table.png").convert_alpha()
+table_image = pygame.image.load("images/poker_table.png").convert_alpha()
 table_image = pygame.transform.scale(table_image, (SCREEN_WIDTH, SCREEN_HEIGHT))
 
 
@@ -87,11 +87,11 @@ player_positions = [
 
 # Setup players
 players = [
-    Player("Player 1", player_positions[0], "player1_avatar.png", 1000),
-    Player("Player 2", player_positions[1], "player2_avatar.png", 1200),
-    Player("Player 3", player_positions[2], "player3_avatar.png", 1500),
-    Player("Player 4", player_positions[3], "player4_avatar.png", 1300),
-    Player("YOU", player_positions[4], "player5_avatar.png", 2000),  # client
+    Player("Player 1", player_positions[0], "images/player1_avatar.png", 1000),
+    Player("Player 2", player_positions[1], "images/player2_avatar.png", 1200),
+    Player("Player 3", player_positions[2], "images/player3_avatar.png", 1500),
+    Player("Player 4", player_positions[3], "images/player4_avatar.png", 1300),
+    Player("YOU", player_positions[4], "images/player5_avatar.png", 2000),  # client
 ]
 
 # (initially hidden buttons, will be visible when clicked on) 
