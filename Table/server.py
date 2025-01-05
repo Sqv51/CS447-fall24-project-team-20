@@ -5,7 +5,7 @@ from poker import PokerGame, Player
 
 # Server configuration
 server = "192.168.196.52"
-port = 4334
+port = 2334
 
 # Create server socket
 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -14,13 +14,13 @@ try:
 except socket.error as e:
     print(str(e))
 
-s.listen(5)  # Allow up to 5 connections
+s.listen(2)  # Allow up to 2
 print("Waiting for connections...")
 
 # Game data
 games = {}  # game_id -> PokerGame
 id_count = 0  # Track total player connections
-MAX_PLAYERS = 5
+MAX_PLAYERS = 2
 
 
 def threaded_client(conn, player_id, game_id):
@@ -63,7 +63,7 @@ def threaded_client(conn, player_id, game_id):
 
             except Exception as e:
                 print(f"Error with player {player_id}: {e}")
-                break
+                pass
 
     except Exception as e:
         print(f"Thread error: {e}")

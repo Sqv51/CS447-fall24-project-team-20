@@ -8,27 +8,27 @@ class Network:
         self.client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.client.settimeout(15)  # Set timeout before attempting to connect
         self.server = "192.168.196.52"
-        #localhost
-        #self.server = "127.0.0.1"
-        self.port = 43513
+        self.port = 8888
         self.addr = (self.server, self.port)
-        self.p = self.connect()
-
-    def getP(self):
-        return self.p
+        self.player_id = self.connect()
+    def getPlayerID(self):
+        return self.player_id
 
     def connect(self):
         try:
-            # Attempt to connect
             self.client.connect(self.addr)
             print("Connected to server!")
-
-            # Receive initial response
-            response = pickle.loads(self.client.recv(2048))
-            if response.get("status") != "ok":  # Check for valid server response
-                raise ConnectionError("Invalid server response")
-
-            return response.get("player_id")  # Return player ID
+            start_time = time.time()
+            while True:
+                if time.time() - start_time > 15:  # 15 seconds timeout
+                    raise socket.timeout("Server did not respond in time.")
+                try:
+                    response = pickle.loads(self.client.recv(8192))  # Increased buffer size
+                    if response.get("status") != "ok":
+                        raise ConnectionError("Invalid server response")
+                    return response.get("player_id")
+                except BlockingIOError:
+                    time.sleep(0.1)  # Wait a bit before retrying
         except socket.timeout:
             print("Server did not respond in time.")
             return None
@@ -38,11 +38,8 @@ class Network:
 
     def send(self, data):
         try:
-            # Send data without encoding (already pickled)
-            self.client.send(data)
-
-            # Receive and return response
-            return pickle.loads(self.client.recv(8192))  # Increased buffer size to 8192
+            self.client.sendall(data)
+            return pickle.loads(self.client.recv(8192))  # Increased buffer size
         except socket.error as e:
             print(f"Socket error: {e}")
             return None
@@ -54,13 +51,17 @@ SCREEN_WIDTH = 1024
 SCREEN_HEIGHT = 768
 POT = 0
 
-# Classes
 class Player:
     def __init__(self, name, position, avatar_path, chips):
         self.name = name
         self.position = position
-        self.avatar = pygame.image.load(avatar_path).convert_alpha()
-        self.avatar = pygame.transform.scale(self.avatar, (80, 80))
+        try:
+            self.avatar = pygame.image.load(avatar_path).convert_alpha()
+            self.avatar = pygame.transform.scale(self.avatar, (80, 80))
+        except FileNotFoundError:
+            print(f"Avatar not found: {avatar_path}")
+            self.avatar = pygame.Surface((80, 80))
+            self.avatar.fill((200, 200, 200))
         self.chips = chips
         self.action_text = ""
         self.rect = pygame.Rect(self.position[0], self.position[1], 80, 80)
@@ -87,10 +88,6 @@ class Player:
         pygame.draw.rect(screen, bubble_color, bubble_rect, border_radius=10)
         screen.blit(text_surf, text_rect)
 
-    def is_clicked(self, pos):
-        return self.rect.collidepoint(pos)
-
-
 class Button:
     def __init__(self, x, y, width, height, text, color, action):
         self.rect = pygame.Rect(x, y, width, height)
@@ -109,22 +106,14 @@ class Button:
         return self.rect.collidepoint(pos)
 
 
-# Functions
 def fetch_game_state(network):
     try:
-        retries = 5
-        while retries > 0:
-            try:
-                response = network.send(pickle.dumps({"action": "get_state"}), timeout=5)
-                if response:
-                    return response
-            except Exception:
-                retries -= 1
-                time.sleep(2)
-        return None
+        response = network.send(pickle.dumps({"action": "get_state"}))
+        if response:
+            return response
     except Exception as e:
         print(f"Error fetching game state: {e}")
-        return None
+    return None
 
 
 def sync_state(players, network):
@@ -133,20 +122,15 @@ def sync_state(players, network):
         global POT
         POT = state['pot']
         for idx, player in enumerate(players):
-            player.chips = state['bets'][player.name]
+            player.chips = list(state['bets'].values())[idx]
 
 
 def create_buttons(players, button_texts, button_color, button_actions):
     buttons = []
     x_start = players[-1].position[0] - 300
     y_start = players[-1].position[1] + 100
-    button_width = 50
-    button_height = 20
-    padding = 15
-
     for i, (text, action) in enumerate(zip(button_texts, button_actions)):
-        button_x = x_start + i * (button_width + padding)
-        button = Button(button_x, y_start, button_width, button_height, text, button_color, action)
+        button = Button(x_start + i * 65, y_start, 50, 20, text, button_color, action)
         buttons.append(button)
     return buttons
 
@@ -158,40 +142,31 @@ def draw_pot(screen, pot):
     screen.blit(pot_text, pot_rect)
 
 
-# Main function
 def main():
     screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
     pygame.display.set_caption("Poker Game")
-    table_image = pygame.image.load('images/poker_table.png').convert_alpha()
-    table_image = pygame.transform.scale(table_image, (SCREEN_WIDTH, SCREEN_HEIGHT))
+    try:
+        table_image = pygame.image.load('images/poker_table.png').convert_alpha()
+        table_image = pygame.transform.scale(table_image, (SCREEN_WIDTH, SCREEN_HEIGHT))
+    except FileNotFoundError:
+        print("Table image not found!")
+        pygame.quit()
+        return
 
-    # Setup players
-    player_positions = [
-        (60, 200), (450, 30), (890, 200), (85, 500), (500, 650)
-    ]
-    players = [
-        Player("Player 1", player_positions[0], 'images/player1_avatar.png', 1000),
-        Player("Player 2", player_positions[1], 'images/player2_avatar.png', 1200),
-        Player("Player 3", player_positions[2], 'images/player3_avatar.png', 1500),
-        Player("Player 4", player_positions[3], 'images/player4_avatar.png', 1300),
-        Player("Player 5", player_positions[4], 'images/player5_avatar.png', 2000),
-    ]
+    player_positions = [(60, 200), (450, 30), (890, 200), (85, 500), (500, 650)]
+    players = [Player(f"Player {i+1}", pos, f'images/player{i+1}_avatar.png', 1000) for i, pos in enumerate(player_positions)]
 
-
-    # Buttons
     button_texts = ["Call", "Raise", "Fold", "Check", "All-In"]
-    button_color = (128, 128, 128)
     button_actions = ["call", "raise", "fold", "check", "allin"]
-    buttons = create_buttons(players, button_texts, button_color, button_actions)
+    buttons = create_buttons(players, button_texts, (128, 128, 128), button_actions)
 
-
+    '''
     network = Network()
-    player_id = network.getP()
+    player_id = network.getPlayerID()
     if not player_id:
         print("Failed to connect to server.")
         return
-
-
+    '''
     running = True
     while running:
         screen.fill((0, 0, 0))
@@ -205,13 +180,16 @@ def main():
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
+            elif event.type == pygame.MOUSEBUTTONDOWN:
+                for button in buttons:
+                    if button.is_clicked(event.pos):
+                        pass
+                        #network.send(pickle.dumps({"action": "player_action", "move": button.action, "amount": 0}))
 
-        sync_state(players, network)
+        #sync_state(players, network)
         pygame.display.flip()
 
     pygame.quit()
 
-
 if __name__ == "__main__":
     main()
-

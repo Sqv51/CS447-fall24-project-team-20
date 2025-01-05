@@ -5,7 +5,7 @@ import pickle
 import sys
 
 SERVER_IP = "192.168.196.52"  # Change if different
-SERVER_PORT = 4334
+SERVER_PORT = 2334
 
 def main():
     # Create a client socket and connect to the server
@@ -67,6 +67,11 @@ Available commands:
         if command == "player_action":
             action = input("Action to perform (call, fold, raise, check, bet): ").strip().lower()
             amount = 0
+
+            #for invalid actions ask for action again
+            if action not in ["call", "fold", "raise", "check", "bet"]:
+                print("Invalid action. Please try again.")
+                continue
 
             # For actions that require an amount, ask for it
             if action in ["raise", "bet"]:

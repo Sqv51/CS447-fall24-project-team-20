@@ -5,7 +5,7 @@ from poker import PokerGame, Player
 
 # Server configuration
 server = "192.168.196.52"
-port = 43513
+port = 8888
 
 # Create server socket
 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -14,14 +14,13 @@ try:
 except socket.error as e:
     print(str(e))
 
-s.listen(5)  # Allow up to 5 connections
+s.listen(2)  # Allow up to 2
 print("Waiting for connections...")
 
 # Game data
 games = {}  # game_id -> PokerGame
 id_count = 0  # Track total player connections
-MAX_PLAYERS = 5
-
+MAX_PLAYERS = 2
 
 def threaded_client(conn, player_id, game_id):
     global id_count
@@ -32,7 +31,7 @@ def threaded_client(conn, player_id, game_id):
         while True:
             try:
                 # Receive data from client
-                data = pickle.loads(conn.recv(4096))
+                data = pickle.loads(conn.recv(8192))  # Increased buffer size
                 if not data:
                     print(f"Player {player_id} disconnected.")
                     break
@@ -63,7 +62,7 @@ def threaded_client(conn, player_id, game_id):
 
             except Exception as e:
                 print(f"Error with player {player_id}: {e}")
-                break
+                pass
 
     except Exception as e:
         print(f"Thread error: {e}")
@@ -71,7 +70,6 @@ def threaded_client(conn, player_id, game_id):
     print(f"Player {player_id} disconnected.")
     id_count -= 1
     conn.close()
-
 
 while True:
     # Accept new connections
