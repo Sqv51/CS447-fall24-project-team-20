@@ -5,7 +5,7 @@ from poker import PokerGame, Player
 
 # Server configuration
 server = "192.168.196.52"
-port = 43513
+port = 4334
 
 # Create server socket
 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
