@@ -5,7 +5,7 @@ import pickle
 import sys
 
 SERVER_IP = "192.168.196.52"  # Change if different
-SERVER_PORT = 2334
+SERVER_PORT = 23345
 
 def main():
     # Create a client socket and connect to the server
