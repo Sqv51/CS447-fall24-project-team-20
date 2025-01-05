@@ -33,10 +33,10 @@ class PokerGame:
     def __init__(self, players):
         self.players = players
         self.deck = Deck()
-        self.hands = {player: self.deck.draw(2) for player in players}
+        self.hands = {}  # Initialize empty hands dict
         self.community_cards = []
         self.turn = 0  # Dealer position
-        self.current_player = 2  # Start with player after big blind
+        self.current_player = None  # Don't set this yet
         self.small_blind = 10
         self.big_blind = 20
         self.minimum_raise = 20
@@ -46,22 +46,60 @@ class PokerGame:
         self.state = PokerGame.GameState.PRE_FLOP
         self.action_log = []
         self.round_complete = False
-        self.post_blinds()
+
+        # Only deal cards and post blinds if we have enough players
+        if len(players) >= 2:
+            self.deal_initial_cards()
+            self.post_blinds()
+            # Set current_player after blinds are posted
+            self.current_player = (self.turn + 2) % len(self.players)  # Start with player after big blind
+
+    def deal_initial_cards(self):
+        """Deal initial cards to all players."""
+        for player in self.players:
+            self.hands[player] = self.deck.draw(2)
 
     def get_player_state(self, player_id):
         """Returns game state specific to the given player."""
+        # Validate player_id is within bounds
+        if player_id < 0 or player_id >= len(self.players):
+            raise ValueError(f"Invalid player_id: {player_id}")
+
         player = self.players[player_id]
         other_players = [p for p in self.players if p != player]
 
+        # Check if game has enough players to start
+        if len(self.players) < 2:
+            return {
+                'player_name': player.name,
+                'player_balance': player.balance,
+                'player_cards': [],
+                'community_cards': [],
+                'other_players': [],
+                'pot': 0,
+                'current_bet': 0,
+                'min_raise': self.minimum_raise,
+                'player_bet': 0,
+                'game_stage': 'waiting_for_players',
+                'valid_actions': [],
+                'action_log': ['Waiting for more players to join...'],
+                'is_turn': False,
+                'current_player': None
+            }
+
+        # Ensure player has cards
+        player_cards = self.hands.get(player, [])
+
         # Fix turn checking logic
-        current_player_obj = self.players[self.current_player]
-        is_players_turn = (player == current_player_obj and not player.folded
-                           and self.state != PokerGame.GameState.SHOWDOWN)
+        is_players_turn = (self.current_player is not None and
+                           player == self.players[self.current_player] and
+                           not player.folded and
+                           self.state != PokerGame.GameState.SHOWDOWN)
 
         return {
             'player_name': player.name,
             'player_balance': player.balance,
-            'player_cards': [Card.int_to_str(c) for c in self.hands[player]],
+            'player_cards': [Card.int_to_str(c) for c in player_cards],
             'community_cards': [Card.int_to_str(c) for c in self.community_cards],
             'other_players': [{
                 'name': p.name,
@@ -78,7 +116,7 @@ class PokerGame:
             'valid_actions': self.get_valid_actions(player) if is_players_turn else [],
             'action_log': self.action_log[-5:],
             'is_turn': is_players_turn,
-            'current_player': self.players[self.current_player].name  # Add this to help debug
+            'current_player': self.players[self.current_player].name if self.current_player is not None else None
         }
 
     def gameStateJson(self):
