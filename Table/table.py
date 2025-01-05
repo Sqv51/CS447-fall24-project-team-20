@@ -19,19 +19,6 @@ class PokerClient:
         self.running = True
         self.last_display_time = 0
         self.auto_refresh = True
-        self.refresh_interval = 5  # Increased to 5 seconds
-        self.input_mode = False    # Flag to prevent refresh during input
-
-    def auto_refresh_thread(self):
-        while self.running:
-            if self.auto_refresh and not self.input_mode:
-                current_time = time.time()
-                if current_time - self.last_display_time >= self.refresh_interval:
-                    if self.refresh_state():
-                        self.display_state()
-                        self.last_display_time = current_time
-            time.sleep(1)  # Reduced CPU usage
-
 
     def connect(self):
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -142,12 +129,8 @@ class PokerClient:
         print("=" * 60)
 
     def handle_play(self):
-        self.input_mode = True  # Prevent refresh during play
-
         if not self.current_state['is_turn']:
             print("⚠️  It's not your turn!")
-            print(f"Current turn: {self.current_state.get('current_player', 'Unknown')}")
-            self.input_mode = False
             return
 
         valid_actions = self.current_state['valid_actions']
@@ -156,7 +139,6 @@ class PokerClient:
 
         if action not in valid_actions:
             print("❌ Invalid action!")
-            self.input_mode = False
             return
 
         amount = 0
@@ -165,7 +147,6 @@ class PokerClient:
                 amount = int(input("Amount: $").strip())
             except ValueError:
                 print("❌ Invalid amount!")
-                self.input_mode = False
                 return
 
         self._send_data({
@@ -179,78 +160,58 @@ class PokerClient:
             self.current_state = state
             self.display_state()
 
-        self.input_mode = False  # Re-enable refresh after play
+    def run(self):
+        if not self.connect():
+            return
 
-        def run(self):
-            if not self.connect():
-                return
+        # Start auto-refresh thread
+        refresh_thread = threading.Thread(target=self.auto_refresh_thread)
+        refresh_thread.daemon = True
+        refresh_thread.start()
 
-            # Start auto-refresh thread
-            refresh_thread = threading.Thread(target=self.auto_refresh_thread)
-            refresh_thread.daemon = True
-            refresh_thread.start()
+        print("\nType 'h' for help\n")
 
-            print("\nType 'h' for help\n")
+        while self.running:
+            try:
+                command = input().strip().lower()
 
-            while self.running:
-                try:
-                    self.input_mode = True  # Prevent refresh during command input
-                    command = input().strip().lower()
-                    self.input_mode = False  # Re-enable refresh after command
-
-                    if command in ['q', 'quit', 'exit']:
-                        print("👋 Goodbye!")
-                        break
-
-                    elif command in ['h', 'help']:
-                        print("""
-    Commands:
-      p, play     - Make a move (when it's your turn)
-      r, refresh  - Manually refresh the game state
-      h, help     - Show this help message
-      q, quit     - Exit the game
-      a           - Toggle auto-refresh (currently: {})
-      i           - Increase refresh interval (+1s)
-      d           - Decrease refresh interval (-1s)
-    """.format("ON" if self.auto_refresh else "OFF"))
-
-                    elif command in ['r', 'refresh']:
-                        if self.refresh_state():
-                            self.display_state()
-
-                    elif command in ['p', 'play']:
-                        self.handle_play()
-
-                    elif command == 'a':
-                        self.auto_refresh = not self.auto_refresh
-                        print(f"Auto-refresh: {'ON' if self.auto_refresh else 'OFF'}")
-
-                    elif command == 'i':
-                        self.refresh_interval += 1
-                        print(f"Refresh interval: {self.refresh_interval}s")
-
-                    elif command == 'd':
-                        if self.refresh_interval > 1:
-                            self.refresh_interval -= 1
-                            print(f"Refresh interval: {self.refresh_interval}s")
-
-                    else:
-                        print("Unknown command. Type 'h' for help.")
-
-                except KeyboardInterrupt:
-                    print("\n👋 Goodbye!")
+                if command in ['q', 'quit', 'exit']:
+                    print("👋 Goodbye!")
                     break
 
-                except Exception as e:
-                    print(f"Error: {e}")
-                    self.input_mode = False
+                elif command in ['h', 'help']:
+                    print("""
+Commands:
+  p, play     - Make a move (when it's your turn)
+  r, refresh  - Manually refresh the game state
+  h, help     - Show this help message
+  q, quit     - Exit the game
+  a           - Toggle auto-refresh (currently: {})
+""".format("ON" if self.auto_refresh else "OFF"))
 
-            self.running = False
-            self.socket.close()
+                elif command in ['r', 'refresh']:
+                    if self.refresh_state():
+                        self.display_state()
 
-    def display_state(self):
-        if not self.current_state or self.input_mode:
-            return
+                elif command in ['p', 'play']:
+                    self.handle_play()
+
+                elif command == 'a':
+                    self.auto_refresh = not self.auto_refresh
+                    print(f"Auto-refresh: {'ON' if self.auto_refresh else 'OFF'}")
+
+                else:
+                    print("Unknown command. Type 'h' for help.")
+
+            except KeyboardInterrupt:
+                print("\n👋 Goodbye!")
+                break
+
+            except Exception as e:
+                print(f"Error: {e}")
+
+        self.running = False
+        self.socket.close()
 
 
 if __name__ == "__main__":
