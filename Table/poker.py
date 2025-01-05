@@ -46,6 +46,33 @@ class PokerGame:
         self.network = Network()  # Initialize the network
         self.post_blinds()
 
+    def get_player_state(self, player_id):
+        """Returns game state specific to the given player."""
+        player = self.players[player_id]
+        other_players = [p for p in self.players if p != player]
+
+        return {
+            'player_name': player.name,
+            'player_balance': player.balance,
+            'player_cards': [Card.int_to_str(c) for c in self.hands[player]],
+            'community_cards': [Card.int_to_str(c) for c in self.community_cards],
+            'other_players': [{
+                'name': p.name,
+                'balance': p.balance,
+                'bet': self.bets[p],
+                'folded': p.folded,
+                'cards': ['??', '??'] if not p.folded else None  # Hide cards of other players
+            } for p in other_players],
+            'pot': self.pot,
+            'current_bet': max(self.bets.values()),
+            'min_raise': self.minimum_raise,
+            'player_bet': self.bets[player],
+            'game_stage': self.state.value,
+            'valid_actions': self.get_valid_actions(player),
+            'action_log': self.action_log[-5:],  # Show only last 5 actions for cleaner display
+            'is_turn': self.turn % len(self.players) == player_id
+        }
+
     def gameStateJson(self):
         return {
             'players': [player.name for player in self.players],
@@ -60,10 +87,9 @@ class PokerGame:
             'state': self.state.value,
             'action_log': self.action_log
         }
-    
+
     def playerCardsJson(self):
         return {player.name: [Card.int_to_str(c) for c in self.hands[player]] for player in self.players}
-    
 
     def post_blinds(self):
         sb_player = self.players[self.turn % len(self.players)]
@@ -168,11 +194,10 @@ class PokerGame:
         winning_hand = scores[winner]
         winner.balance += self.pot
         self.action_log.append(f"{winner.name} wins the pot of {self.pot} with a score of {winning_hand}")
-        #display other players hands and scores who did not fold
+        # display other players hands and scores who did not fold
         for player, score in scores.items():
             if player != winner:
                 self.action_log.append(f"{player.name} had a score of {score} and folded.")
-
 
         self.pot = 0
         return winner
@@ -205,7 +230,8 @@ class PokerGame:
                 print("Invalid input. Try again.")
             if user_input.startswith('bet') or user_input.startswith('raise'):
                 parts = user_input.split()
-                decision = (PokerGame.Moves[parts[0].upper()], int(parts[1])) if len(parts) == 2 and parts[1].isdigit() else (PokerGame.Moves.FOLD, 0)
+                decision = (PokerGame.Moves[parts[0].upper()], int(parts[1])) if len(parts) == 2 and parts[
+                    1].isdigit() else (PokerGame.Moves.FOLD, 0)
             else:
                 decision = (PokerGame.Moves[user_input.upper()], 0)
         except Exception:

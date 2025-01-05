@@ -31,30 +31,31 @@ def threaded_client(conn, player_id, game_id):
 
         while True:
             try:
-                # Receive data from client
                 data = pickle.loads(conn.recv(4096))
                 if not data:
                     print(f"Player {player_id} disconnected.")
                     break
 
-                # Process client request
                 if game_id in games:
                     game = games[game_id]
 
                     if data["action"] == "get_state":
-                        # Send game state
-                        conn.sendall(pickle.dumps(game.gameStateJson()))
+                        # Send player-specific game state
+                        player_state = game.get_player_state(player_id)
+                        conn.sendall(pickle.dumps(player_state))
 
                     elif data["action"] == "player_action":
-                        # Handle player actions
                         player = game.players[player_id]
                         action = data["move"]
                         amount = data.get("amount", 0)
-                        game.player_action(player, game.Moves[action.upper()], amount)
-                        game.next_stage()
 
-                        # Send updated game state
-                        conn.sendall(pickle.dumps(game.gameStateJson()))
+                        if game.turn % len(game.players) == player_id:
+                            game.player_action(player, game.Moves[action.upper()], amount)
+                            game.next_stage()
+
+                        # Send updated player-specific state
+                        player_state = game.get_player_state(player_id)
+                        conn.sendall(pickle.dumps(player_state))
 
                     else:
                         conn.sendall(pickle.dumps({"error": "Invalid request"}))
@@ -63,7 +64,7 @@ def threaded_client(conn, player_id, game_id):
 
             except Exception as e:
                 print(f"Error with player {player_id}: {e}")
-                pass
+                break
 
     except Exception as e:
         print(f"Thread error: {e}")
