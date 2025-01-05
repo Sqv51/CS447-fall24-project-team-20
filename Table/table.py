@@ -82,7 +82,7 @@ player_positions = [
     (450, 30),  # Player 2 (top-center)
     (890, 200),  # Player 3 (top-right)
     (85, 500),  # Player 4 (bottom-left)
-    (500, 650),  # you (bottom-center)
+    (500, 650),  # You (bottom-center)
 ]
 
 # Setup players
@@ -94,7 +94,7 @@ players = [
     Player("YOU", player_positions[4], "player5_avatar.png", 2000),  # client
 ]
 
-# (initially hidden buttons)
+# (initially hidden buttons, will be visible when clicked on) 
 buttons = []
 button_texts = ["Call", "Raise", "Fold", "Check", "All-In"]
 button_color = (128, 128, 128)  
@@ -107,7 +107,7 @@ pot = 0
 show_buttons = False
 
 def create_buttons():
-    """Create buttons below the client player (YOU)."""
+    """Buttons below the client player (YOU)."""
     global buttons
     buttons = []
     x_start = players[-1].position[0] - 300  
@@ -122,7 +122,7 @@ def create_buttons():
         buttons.append(button)
 
 def draw_pot(screen, pot):
-    """Draw the pot value in the center of the table."""
+    """Pot value in the center of the table."""
     font = pygame.font.Font(None, 36)
     pot_text = font.render(f"Pot: ${pot}", True, (255, 255, 255))
     pot_rect = pot_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2))
@@ -161,7 +161,7 @@ while running:
                     print(f"Button '{button.text}' clicked! Action: {button.action}")
                    
                     if button.action in ["allin", "raise", "call"]:
-                        pot += 100  
+                        pot += 100 # need to change this to the players' money amount
 
     pygame.display.flip()
 
