@@ -40,20 +40,28 @@ def threaded_client(conn, player_id, game_id):
                     game = games[game_id]
 
                     if data["action"] == "get_state":
-                        # Send player-specific game state
                         player_state = game.get_player_state(player_id)
                         conn.sendall(pickle.dumps(player_state))
 
                     elif data["action"] == "player_action":
-                        player = game.players[player_id]
-                        action = data["move"]
-                        amount = data.get("amount", 0)
+                        if game.current_player == player_id:
+                            player = game.players[player_id]
+                            action = data["move"]
+                            amount = data.get("amount", 0)
 
-                        if game.turn % len(game.players) == player_id:
-                            game.player_action(player, game.Moves[action.upper()], amount)
-                            game.next_stage()
+                            # Process the action
+                            action_successful = game.player_action(player, game.Moves[action.upper()], amount)
 
-                        # Send updated player-specific state
+                            # Check if we should move to next stage
+                            if action_successful and game.round_complete:
+                                game.next_stage()
+
+                            # Check for showdown
+                            if game.state == game.GameState.SHOWDOWN:
+                                game.get_winner()
+                                # Start new hand here if desired
+
+                        # Send updated state
                         player_state = game.get_player_state(player_id)
                         conn.sendall(pickle.dumps(player_state))
 
