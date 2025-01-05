@@ -1,166 +1,156 @@
 import pygame
-from network import Network
 import pickle
-pygame.font.init()
-import game
+from network import Network
 
-width = 700
-height = 700
-win = pygame.display.set_mode((width, height))
-pygame.display.set_caption("Client")
+pygame.init()
 
+# Constants
+SCREEN_WIDTH = 1024
+SCREEN_HEIGHT = 768
+screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+pygame.display.set_caption("Poker Game")
+
+# Load Table Image
+table_image = pygame.image.load("images/poker_table.png").convert_alpha()
+table_image = pygame.transform.scale(table_image, (SCREEN_WIDTH, SCREEN_HEIGHT))
+
+# Network Setup
+network = Network()
+
+class Player:
+    def __init__(self, name, position, avatar_path, chips):
+        self.name = name
+        self.position = position
+        self.avatar = pygame.image.load(avatar_path).convert_alpha()
+        self.avatar = pygame.transform.scale(self.avatar, (80, 80))
+        self.chips = chips
+        self.action_text = ""
+        self.rect = pygame.Rect(self.position[0], self.position[1], 80, 80)
+
+    def draw(self, screen):
+        screen.blit(self.avatar, self.position)
+        font = pygame.font.Font(None, 24)
+        name_text = font.render(self.name, True, (255, 255, 255))
+        screen.blit(name_text, (self.position[0], self.position[1] - 20))
+
+        chips_text = font.render(f"${self.chips}", True, (255, 255, 255))
+        screen.blit(chips_text, (self.position[0], self.position[1] + 90))
+
+        if self.action_text:
+            self.draw_action_bubble(screen)
+
+    def draw_action_bubble(self, screen):
+        bubble_color = (255, 255, 255)
+        text_color = (0, 0, 0)
+        font = pygame.font.Font(None, 28)
+        text_surf = font.render(self.action_text, True, text_color)
+        text_rect = text_surf.get_rect(center=(self.position[0] + 70, self.position[1] - 5))
+        bubble_rect = pygame.Rect(
+            text_rect.x - 10, text_rect.y - 10, text_rect.width + 20, text_rect.height + 10
+        )
+        pygame.draw.rect(screen, bubble_color, bubble_rect, border_radius=10)
+        screen.blit(text_surf, text_rect)
 
 class Button:
-    def __init__(self, text, x, y, color):
+    def __init__(self, x, y, width, height, text, color, action):
+        self.rect = pygame.Rect(x, y, width, height)
         self.text = text
-        self.x = x
-        self.y = y
         self.color = color
-        self.width = 150
-        self.height = 100
+        self.action = action
+        self.font = pygame.font.Font(None, 22)
 
-    def draw(self, win):
-        pygame.draw.rect(win, self.color, (self.x, self.y, self.width, self.height))
-        font = pygame.font.SysFont("comicsans", 40)
-        text = font.render(self.text, 1, (255,255,255))
-        win.blit(text, (self.x + round(self.width/2) - round(text.get_width()/2), self.y + round(self.height/2) - round(text.get_height()/2)))
+    def draw(self, screen):
+        pygame.draw.rect(screen, self.color, self.rect, border_radius=8)
+        text_surf = self.font.render(self.text, True, (255, 255, 255))
+        text_rect = text_surf.get_rect(center=self.rect.center)
+        screen.blit(text_surf, text_rect)
 
-    def click(self, pos):
-        x1 = pos[0]
-        y1 = pos[1]
-        if self.x <= x1 <= self.x + self.width and self.y <= y1 <= self.y + self.height:
-            return True
-        else:
-            return False
+    def is_clicked(self, pos):
+        return self.rect.collidepoint(pos)
 
+player_positions = [
+    (60, 200),
+    (450, 30),
+    (890, 200),
+    (85, 500),
+    (500, 650),
+]
 
-def redrawWindow(win, game, p):
-    win.fill((128,128,128))
+players = [
+    Player("Player 1", player_positions[0], "images/player1_avatar.png", 1000),
+    Player("Player 2", player_positions[1], "images/player2_avatar.png", 1200),
+    Player("Player 3", player_positions[2], "images/player3_avatar.png", 1500),
+    Player("Player 4", player_positions[3], "images/player4_avatar.png", 1300),
+    Player("YOU", player_positions[4], "images/player5_avatar.png", 2000),
+]
 
-    if not(game.connected()):
-        font = pygame.font.SysFont("comicsans", 80)
-        text = font.render("Waiting for Player...", 1, (255,0,0), True)
-        win.blit(text, (width/2 - text.get_width()/2, height/2 - text.get_height()/2))
-    else:
-        font = pygame.font.SysFont("comicsans", 60)
-        text = font.render("Your Move", 1, (0, 255,255))
-        win.blit(text, (80, 200))
+button_texts = ["Call", "Raise", "Fold", "Check", "All-In"]
+button_actions = ["call", "raise", "fold", "check", "allin"]
+buttons = []
+pot = 0
+show_buttons = False
 
-        text = font.render("Opponents", 1, (0, 255, 255))
-        win.blit(text, (380, 200))
+# Create buttons
+def create_buttons():
+    global buttons
+    buttons = []
+    x_start = 400
+    y_start = 700
+    button_width = 80
+    button_height = 40
+    padding = 20
 
-        move1 = game.get_player_move(0)
-        move2 = game.get_player_move(1)
-        if game.bothWent():
-            text1 = font.render(move1, 1, (0,0,0))
-            text2 = font.render(move2, 1, (0, 0, 0))
-        else:
-            if game.p1Went and p == 0:
-                text1 = font.render(move1, 1, (0,0,0))
-            elif game.p1Went:
-                text1 = font.render("Locked In", 1, (0, 0, 0))
-            else:
-                text1 = font.render("Waiting...", 1, (0, 0, 0))
+    for i, (text, action) in enumerate(zip(button_texts, button_actions)):
+        button_x = x_start + i * (button_width + padding)
+        buttons.append(Button(button_x, y_start, button_width, button_height, text, (128, 128, 128), action))
 
-            if game.p2Went and p == 1:
-                text2 = font.render(move2, 1, (0,0,0))
-            elif game.p2Went:
-                text2 = font.render("Locked In", 1, (0, 0, 0))
-            else:
-                text2 = font.render("Waiting...", 1, (0, 0, 0))
+# Draw pot value
+def draw_pot(screen, pot):
+    font = pygame.font.Font(None, 36)
+    pot_text = font.render(f"Pot: ${pot}", True, (255, 255, 255))
+    pot_rect = pot_text.get_rect(center=(SCREEN_WIDTH // 2, 50))
+    screen.blit(pot_text, pot_rect)
 
-        if p == 1:
-            win.blit(text2, (100, 350))
-            win.blit(text1, (400, 350))
-        else:
-            win.blit(text1, (100, 350))
-            win.blit(text2, (400, 350))
-
-        for btn in btns:
-            btn.draw(win)
-
-    pygame.display.update()
-
-
-btns = [Button("Rock", 50, 500, (0,0,0)), Button("Scissors", 250, 500, (255,0,0)), Button("Paper", 450, 500, (0,255,0))]
+# Main game loop
 def main():
     run = True
     clock = pygame.time.Clock()
-    n = Network()
-    player = int(n.getP())
-    print("You are player", player)
+    create_buttons()
 
     while run:
-        #wait for the server to send the game
-        clock.tick(60) #this is the frame rate of the game
+        screen.fill((0, 0, 0))
+        screen.blit(table_image, (0, 0))
 
         try:
-            game = n.send("get")
+            game_state = network.send(pickle.dumps({"action": "get_state"}))
+            game_state = pickle.loads(game_state)
+        except Exception as e:
+            print("Failed to fetch game state:", e)
+            break
 
-        except:
-            game = n.send("get")
-            pass
+        draw_pot(screen, game_state['pot'])
+        for button in buttons:
+            button.draw(screen)
 
-        if game.bothWent():
-            redrawWindow(win, game, player)
-            pygame.time.delay(500)
-            try:
-                game = n.send("reset")
-            except:
-                run = False
-                print("Couldn't get game")
-                break
-
-            font = pygame.font.SysFont("comicsans", 90)
-            if (game.winner() == 1 and player == 1) or (game.winner() == 0 and player == 0):
-                text = font.render("You Won!", 1, (255,0,0))
-            elif game.winner() == -1:
-                text = font.render("Tie Game!", 1, (255,0,0))
-            else:
-                text = font.render("You Lost...", 1, (255, 0, 0))
-
-            win.blit(text, (width/2 - text.get_width()/2, height/2 - text.get_height()/2))
-            pygame.display.update()
-            pygame.time.delay(2000)
+        pygame.display.flip()
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 run = False
-                pygame.quit()
-
-            if event.type == pygame.MOUSEBUTTONDOWN:
+            elif event.type == pygame.MOUSEBUTTONDOWN:
                 pos = pygame.mouse.get_pos()
-                for btn in btns:
-                    if btn.click(pos) and game.connected():
-                        if player == 0:
-                            if not game.p1Went:
-                                n.send(btn.text)
-                        else:
-                            if not game.p2Went:
-                                n.send(btn.text)
+                for button in buttons:
+                    if button.is_clicked(pos):
+                        action = button.action
+                        amount = 100 if action in ["raise", "allin"] else 0
+                        try:
+                            response = network.send(pickle.dumps({"action": "player_action", "move": action, "amount": amount}))
+                            print("Server Response:", pickle.loads(response))
+                        except Exception as e:
+                            print("Failed to send action:", e)
 
-        redrawWindow(win, game, player)
-
-def menu_screen():
-    run = True
-    clock = pygame.time.Clock()
-
-    while run:
         clock.tick(60)
-        win.fill((128, 128, 128))
-        font = pygame.font.SysFont("comicsans", 60)
-        text = font.render("Click to Play!", 1, (255,0,0))
-        win.blit(text, (100,200))
-        pygame.display.update()
+    pygame.quit()
 
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                pygame.quit()
-                run = False
-            if event.type == pygame.MOUSEBUTTONDOWN:
-                run = False
-
+if __name__ == "__main__":
     main()
-
-while True:
-    menu_screen()

@@ -1,5 +1,7 @@
 import random
 import time
+from network import Network
+import pickle
 from enum import Enum
 from treys import Card, Deck, Evaluator  # pip install treys for this to work
 
@@ -41,8 +43,8 @@ class PokerGame:
         self.bets = {player: 0 for player in players}
         self.state = PokerGame.GameState.PRE_FLOP
         self.action_log = []  # Log for player actions
+        self.network = Network()  # Initialize the network
         self.post_blinds()
-
 
     def gameStateJson(self):
         return {
@@ -78,6 +80,7 @@ class PokerGame:
         if player.folded:
             return
 
+        # Perform the action locally
         if action == PokerGame.Moves.BET:
             if amount < self.minimum_raise or amount > player.balance:
                 raise ValueError("Invalid bet amount.")
@@ -102,6 +105,23 @@ class PokerGame:
             self.action_log.append(f"{player.name} checked")
         else:
             raise ValueError("Invalid action.")
+
+        # Send updated state to the server
+        updated_state = self.gameStateJson()
+        self.network.send(pickle.dumps(updated_state))
+
+    def sync_with_server(self):
+        try:
+            # Send request to get updated state
+            updated_state = self.network.send(pickle.dumps({"action": "get_state"}))
+            # Update game state locally
+            server_state = pickle.loads(updated_state)
+            self.pot = server_state['pot']
+            self.bets = server_state['bets']
+            self.community_cards = server_state['community_cards']
+            self.state = PokerGame.GameState(server_state['state'])
+        except Exception as e:
+            print(f"Failed to sync with server: {e}")
 
     def evaluate(self):
         evaluator = Evaluator()
@@ -199,7 +219,14 @@ class PokerGame:
                 self.turn += 1
                 continue
             print(f"{player.name}'s turn.")
-            action, amount = self.get_player_decision(player)
+            # Send the current game state to the server and wait for the player's action
+            game_state = self.gameStateJson()
+            self.network.send(pickle.dumps(game_state))  # Send state to server
+
+            # Get response from server
+            response = pickle.loads(self.network.client.recv(4096))  # Receive player's action
+            action, amount = response['action'], response['amount']  # Extract action and amount
+
             try:
                 self.player_action(player, action, amount)
             except ValueError as e:
@@ -209,6 +236,7 @@ class PokerGame:
                 self.next_stage()
             if self.state == PokerGame.GameState.SHOWDOWN:
                 break
+            self.sync_with_server()
 
         winner = self.get_winner()
         print("\nGame Summary:")

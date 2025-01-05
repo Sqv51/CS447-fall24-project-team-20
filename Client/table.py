@@ -1,7 +1,48 @@
 import pygame
-
+from network import Network
+import pickle
+import time
 
 pygame.init()
+
+network = Network()
+
+print("getting player id")
+player_id = network.getP()
+print(f"Player ID: {player_id}")
+
+if not player_id:  # Connection failure
+    print("Failed to connect to server. Exiting...")
+    pygame.quit()
+    exit()
+
+
+def sync_state():
+    global pot
+    state = fetch_game_state()
+    if state:
+        # Update the pot and other UI elements
+        pot = state['pot']
+        for idx, player in enumerate(players):
+            player.chips = state['bets'][player.name]  # Update player chips
+
+def fetch_game_state():
+    try:
+        retries = 3
+        while retries > 0:
+            try:
+                response = network.send(pickle.dumps({"action": "get_state"}))
+                if response:
+                    return response
+            except Exception as e:
+                retries -= 1
+                time.sleep(1)
+        return None
+
+        return response  # Returns the server's response
+    except Exception as e:
+        print(f"Error fetching game state: {e}")
+        return None
 
 
 SCREEN_WIDTH = 1024
@@ -144,25 +185,38 @@ while running:
         for button in buttons:
             button.draw(screen)
 
- 
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
-            running = False
-        elif event.type == pygame.MOUSEBUTTONDOWN:
-            pos = event.pos
-            
-            if players[-1].is_clicked(pos):  
-                show_buttons = True  
-                create_buttons()  
-           
-            for button in buttons:
-                if button.is_clicked(pos) and show_buttons:
-                    players[-1].action_text = button.text
-                    print(f"Button '{button.text}' clicked! Action: {button.action}")
-                   
-                    if button.action in ["allin", "raise", "call"]:
-                        pot += 100 # need to change this to the players' money amount
+    try:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+            elif event.type == pygame.MOUSEBUTTONDOWN:
+                pos = event.pos
+                if players[-1].is_clicked(pos):
+                    show_buttons = True
+                    create_buttons()
 
+                for button in buttons:
+                    if button.is_clicked(pos) and show_buttons:
+                        players[-1].action_text = button.text
+                        print(f"Button '{button.text}' clicked! Action: {button.action}")
+
+                        # Send action to server
+                        try:
+                            action_data = {
+                                "action": "player_action",
+                                "move": button.action,
+                                "amount": 100 if button.action in ["raise", "allin"] else 0
+                            }
+                            response = network.send(pickle.dumps(action_data))
+                            pot = response["pot"]  # Update pot
+                        except Exception as e:
+                            print(f"Action failed: {e}")
+    except Exception as e:
+        print(f"Error in event loop: {e}")
+
+    print("Syncing state...")
+    sync_state()
+    print("State synced.")
     pygame.display.flip()
 
 pygame.quit()
