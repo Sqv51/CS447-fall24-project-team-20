@@ -360,7 +360,7 @@ class PokerGame:
         # display other players hands and scores who did not fold
         for player, score in scores.items():
             if player != winner:
-                self.action_log.append(f"{player.name} had a score of {score} and folded.")
+                self.action_log.append(f"{player.name} had a score of {score} and lost the round")
 
         self.pot = 0
         return winner
