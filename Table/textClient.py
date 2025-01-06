@@ -12,6 +12,21 @@ SERVER_IP = "192.168.196.52"
 SERVER_PORT = 23345
 
 
+#map emojis to card suits
+def get_emoji(card):
+    suits = {'s': '♠️', 'h': '♥️', 'd': '♦️', 'c': '♣️'}
+    values = {'A': 'A', 'K': 'K', 'Q': 'Q', 'J': 'J', 'T': '10'}
+    values.update({str(i): str(i) for i in range(2, 10)})
+
+    value = card[:-1]  # Extract value (e.g., 'J' in 'Jc')
+    suit = card[-1]  # Extract suit (e.g., 'c' in 'Jc')
+
+    return f"{values[value]}({suits[suit]})"
+
+
+
+
+
 def calculateHandStrength(player_cards, community_cards):
     evaluator = treys.Evaluator()
     if len(player_cards) + len(community_cards) >= 5:
@@ -114,14 +129,15 @@ class PokerClient:
         # Display pot and current bet
         print(f"\n💰 Pot: ${state['pot']}  Current Bet: ${state['current_bet']}")
 
-
         print("\n👤 Your Information:")
         print(f"Name: {state['player_name']}")
         print(f"Balance: ${state['player_balance']}")
-        print(f"Your Cards: {' '.join(state['player_cards'])}")
-        #use treys to get hand strength
-        handStrength = calculateHandStrength(state['player_cards'], state['community_cards'])
-        print(f"Your Hand Strength: {handStrength}")
+        # Use emojis to display cards
+        player_cards = state['player_cards']
+        formatted_cards = [get_emoji(card) for card in player_cards]
+        print(f"Your Cards: {' '.join(formatted_cards)}")
+
+
         print(f"Your Current Bet: ${state['player_bet']}")
 
         # Display other players
@@ -145,7 +161,6 @@ class PokerClient:
 
         print("\nCommands: [p]lay, [r]efresh, [h]elp, [q]uit")
         print("=" * 60)
-
     def handle_play(self):
         if not self.current_state['is_turn']:
             print("⚠️  It's not your turn!")

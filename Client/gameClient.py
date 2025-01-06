@@ -16,6 +16,16 @@ FULL_DECK = []         # 52 kartlık deste (opsiyonel)
 COMMUNITY_CARDS = []   # Topluluk (community) kartları
 MY_CARDS = []          # Local oyuncunun elindeki kartlar
 
+def get_emoji(card):
+    suits = {'s': '♠️', 'h': '♥️', 'd': '♦️', 'c': '♣️'}
+    values = {'A': 'A', 'K': 'K', 'Q': 'Q', 'J': 'J', 'T': '10'}
+    values.update({str(i): str(i) for i in range(2, 10)})
+
+    value = card[:-1]  # Extract value (e.g., 'J' in 'Jc')
+    suit = card[-1]  # Extract suit (e.g., 'c' in 'Jc')
+
+    return f"{values[value]}({suits[suit]})"
+
 class Player:
     def __init__(self, name, position, avatar_path, chips):
         self.name = name
@@ -172,10 +182,14 @@ def sync_state(players, buttons, network):
         # Topluluk kartları
         if 'community_cards' in state:
             COMMUNITY_CARDS = state['community_cards']
+            # Emoji'ye çevir
+            COMMUNITY_CARDS = [get_emoji(card) for card in COMMUNITY_CARDS]
 
         # Kendi kartlarımız
         if 'player_cards' in state:
             MY_CARDS = state['player_cards']
+            # Emoji'ye çevir
+            MY_CARDS = [get_emoji(card) for card in MY_CARDS]
         else:
             MY_CARDS = []
 
