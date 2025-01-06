@@ -182,14 +182,11 @@ def sync_state(players, buttons, network):
         # Topluluk kartları
         if 'community_cards' in state:
             COMMUNITY_CARDS = state['community_cards']
-            # Emoji'ye çevir
-            COMMUNITY_CARDS = [get_emoji(card) for card in COMMUNITY_CARDS]
+            
 
         # Kendi kartlarımız
         if 'player_cards' in state:
             MY_CARDS = state['player_cards']
-            # Emoji'ye çevir
-            MY_CARDS = [get_emoji(card) for card in MY_CARDS]
         else:
             MY_CARDS = []
 
