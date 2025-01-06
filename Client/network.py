@@ -1,3 +1,5 @@
+# network.py
+
 import socket
 import pickle
 
@@ -5,9 +7,8 @@ class Network:
     def __init__(self):
         self.client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.client.settimeout(15)  # Bağlantı öncesi zaman aşımı
-        self.server = "192.168.196.52"  # Sunucu IP
-        # Örneğin localhost:
-        # self.server = "127.0.0.1"
+        self.server = "192.168.196.52"   # Sunucu IP (test için localhost)
+        # self.server = "192.168.x.x"  # Gerçek sunucu IP
         self.port = 23345
         self.addr = (self.server, self.port)
         self.p = self.connect()
@@ -19,12 +20,10 @@ class Network:
         try:
             self.client.connect(self.addr)
             print("Connected to server!")
-
             # Sunucudan ilk yanıt
             response = pickle.loads(self.client.recv(2048))
             if response.get("status") != "ok":
                 raise ConnectionError("Invalid server response")
-
             return response.get("player_id")
         except socket.timeout:
             print("Server did not respond in time.")
