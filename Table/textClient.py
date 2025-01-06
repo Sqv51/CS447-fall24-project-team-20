@@ -6,9 +6,20 @@ import sys
 import time
 import threading
 import os
+import treys
 
 SERVER_IP = "192.168.196.52"
 SERVER_PORT = 23345
+
+
+def calculateHandStrength(player_cards, community_cards):
+    evaluator = treys.Evaluator()
+    if len(player_cards) + len(community_cards) >= 5:
+        score = evaluator.evaluate(player_cards, community_cards)
+        strength = evaluator.get_rank_class(score)
+        return strength
+    else:
+        return "Not enough cards to evaluate"
 
 
 class PokerClient:
@@ -103,11 +114,14 @@ class PokerClient:
         # Display pot and current bet
         print(f"\n💰 Pot: ${state['pot']}  Current Bet: ${state['current_bet']}")
 
-        # Display player's information with emoji
+
         print("\n👤 Your Information:")
         print(f"Name: {state['player_name']}")
         print(f"Balance: ${state['player_balance']}")
         print(f"Your Cards: {' '.join(state['player_cards'])}")
+        #use treys to get hand strength
+        handStrength = calculateHandStrength(state['player_cards'], state['community_cards'])
+        print(f"Your Hand Strength: {handStrength}")
         print(f"Your Current Bet: ${state['player_bet']}")
 
         # Display other players
