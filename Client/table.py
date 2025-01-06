@@ -1,48 +1,8 @@
 import pygame
 import pickle
-import time
-import socket
 
-class Network:
-    def __init__(self):
-        self.client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.client.settimeout(15)  # Set timeout before attempting to connect
-        self.server = "192.168.196.52"
-        self.port = 8888
-        self.addr = (self.server, self.port)
-        self.player_id = self.connect()
-    def getPlayerID(self):
-        return self.player_id
 
-    def connect(self):
-        try:
-            self.client.connect(self.addr)
-            print("Connected to server!")
-            start_time = time.time()
-            while True:
-                if time.time() - start_time > 15:  # 15 seconds timeout
-                    raise socket.timeout("Server did not respond in time.")
-                try:
-                    response = pickle.loads(self.client.recv(8192))  # Increased buffer size
-                    if response.get("status") != "ok":
-                        raise ConnectionError("Invalid server response")
-                    return response.get("player_id")
-                except BlockingIOError:
-                    time.sleep(0.1)  # Wait a bit before retrying
-        except socket.timeout:
-            print("Server did not respond in time.")
-            return None
-        except Exception as e:
-            print(f"Connection failed: {e}")
-            return None
 
-    def send(self, data):
-        try:
-            self.client.sendall(data)
-            return pickle.loads(self.client.recv(8192))  # Increased buffer size
-        except socket.error as e:
-            print(f"Socket error: {e}")
-            return None
 
 pygame.init()
 
@@ -160,13 +120,6 @@ def main():
     button_actions = ["call", "raise", "fold", "check", "allin"]
     buttons = create_buttons(players, button_texts, (128, 128, 128), button_actions)
 
-    '''
-    network = Network()
-    player_id = network.getPlayerID()
-    if not player_id:
-        print("Failed to connect to server.")
-        return
-    '''
     running = True
     while running:
         screen.fill((0, 0, 0))
