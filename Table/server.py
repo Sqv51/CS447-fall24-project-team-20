@@ -22,6 +22,11 @@ games = {}  # game_id -> PokerGame
 id_count = 0  # Track total player connections
 MAX_PLAYERS = 2
 
+def cleanup_game(game_id):
+    if game_id in games:
+        del games[game_id]
+
+
 
 def threaded_client(conn, player_id, game_id):
     global id_count
@@ -80,6 +85,8 @@ def threaded_client(conn, player_id, game_id):
     print(f"Player {player_id} disconnected.")
     id_count -= 1
     conn.close()
+    #print game logs here
+    cleanup_game(game_id)
 
 
 while True:

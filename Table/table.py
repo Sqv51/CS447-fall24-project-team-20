@@ -36,6 +36,10 @@ class PokerClient:
             print(f"Failed to connect to server: {e}")
             return False
 
+    def handle_disconnect(self):
+        print("Lost connection to server")
+        self.running = False
+        self.socket.close()
     def _send_data(self, data):
         try:
             self.socket.sendall(pickle.dumps(data))

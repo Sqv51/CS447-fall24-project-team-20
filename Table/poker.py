@@ -46,6 +46,8 @@ class PokerGame:
         self.state = PokerGame.GameState.PRE_FLOP
         self.action_log = []
         self.round_complete = False
+        self.action_needed = {player: False for player in players}
+        self.current_round_players = []
 
         # Only deal cards and post blinds if we have enough players
         if len(players) >= 2:
@@ -58,6 +60,15 @@ class PokerGame:
         """Deal initial cards to all players."""
         for player in self.players:
             self.hands[player] = self.deck.draw(2)
+
+    def reset_round(self):
+        self.deck = Deck()
+        self.hands = {}
+        self.community_cards = []
+        self.bets = {player: 0 for player in self.players}
+        self.last_raiser = None
+        self.round_complete = False
+        self.state = PokerGame.GameState.PRE_FLOP
 
     def get_player_state(self, player_id):
         """Returns game state specific to the given player."""
@@ -148,13 +159,22 @@ class PokerGame:
         self.place_bet(bb_player, self.big_blind)
         self.action_log.append(f"{bb_player.name} posted big blind {self.big_blind}")
 
-        # Last raiser is the big blind
+        # Set last raiser to big blind
         self.last_raiser = bb_player
+
+        # Set initial action to player after big blind
+        self.current_player = (self.turn + 3) % len(self.players)
+
+        # Mark all players as needing action except blinds
+        for player in self.players:
+            self.action_needed[player] = True
+        self.action_needed[sb_player] = False  # Will need to complete their blind
+        self.action_needed[bb_player] = False  # Already complete unless raised
+
     def deal_community(self, count):
         self.community_cards.extend(self.deck.draw(count))
 
     def player_action(self, player, action, amount=0):
-        # Verify it's actually this player's turn
         if self.players[self.current_player] != player:
             return False
 
@@ -165,52 +185,58 @@ class PokerGame:
         current_bet = self.bets[player]
 
         try:
-            if action == PokerGame.Moves.FOLD:
+            if action == self.Moves.FOLD:
                 player.folded = True
                 self.action_log.append(f"{player.name} folded")
-                self.next_player()
-                return True
+                self.action_needed[player] = False
 
-            elif action == PokerGame.Moves.CHECK:
+            elif action == self.Moves.CHECK:
                 if max_bet > current_bet:
                     raise ValueError("Cannot check when there are outstanding bets")
                 self.action_log.append(f"{player.name} checked")
-                self.next_player()
-                return True
+                self.action_needed[player] = False
 
-            elif action == PokerGame.Moves.CALL:
+            elif action == self.Moves.CALL:
                 call_amount = max_bet - current_bet
                 if call_amount > 0:
                     self.place_bet(player, call_amount)
                     self.action_log.append(f"{player.name} called {call_amount}")
                 else:
                     self.action_log.append(f"{player.name} checked")
-                self.next_player()
-                return True
+                self.action_needed[player] = False
 
-            elif action == PokerGame.Moves.RAISE:
+            elif action == self.Moves.RAISE:
                 if amount < max_bet + self.minimum_raise:
                     raise ValueError(f"Raise must be at least {max_bet + self.minimum_raise}")
                 self.place_bet(player, amount - current_bet)
                 self.action_log.append(f"{player.name} raised to {amount}")
+                # Mark all players as needing action except raiser
+                for p in self.players:
+                    if not p.folded and p != player:
+                        self.action_needed[p] = True
+                self.action_needed[player] = False
                 self.last_raiser = player
-                self.round_complete = False
-                self.next_player()
-                return True
 
-            elif action == PokerGame.Moves.BET:
+            elif action == self.Moves.BET:
                 if max_bet > 0:
                     raise ValueError("Cannot bet when there are outstanding bets. Use raise instead.")
                 if amount < self.minimum_raise:
                     raise ValueError(f"Bet must be at least {self.minimum_raise}")
                 self.place_bet(player, amount)
                 self.action_log.append(f"{player.name} bet {amount}")
+                # Mark all players as needing action except bettor
+                for p in self.players:
+                    if not p.folded and p != player:
+                        self.action_needed[p] = True
+                self.action_needed[player] = False
                 self.last_raiser = player
-                self.round_complete = False
-                self.next_player()
-                return True
 
-            return False
+            # Move to next player
+            if self.is_betting_round_complete():
+                self.next_stage()
+            else:
+                self.next_player()
+            return True
 
         except ValueError as e:
             self.action_log.append(f"Invalid action by {player.name}: {str(e)}")
@@ -268,34 +294,47 @@ class PokerGame:
 
         return True
 
-    def next_stage(self):
-        """Progress to the next stage of the game if round is complete."""
-        if not self.round_complete:
-            return False
-
+    def is_betting_round_complete(self):
+        """Check if the current betting round is complete."""
         active_players = [p for p in self.players if not p.folded]
         if len(active_players) <= 1:
-            self.state = PokerGame.GameState.SHOWDOWN
             return True
+
+        # Check if all active players have acted and bets are equal
+        all_bets_equal = len(set(self.bets[p] for p in active_players)) == 1
+        all_acted = not any(self.action_needed[p] for p in active_players)
+
+        return all_bets_equal and all_acted
+
+    def next_stage(self):
+        """Progress to the next stage of the game."""
+        if not self.is_betting_round_complete():
+            return False
 
         # Reset betting round
         self.last_raiser = None
-        self.round_complete = False
         for player in self.players:
             self.bets[player] = 0
+            self.action_needed[player] = True
+
+        active_players = [p for p in self.players if not p.folded]
+        if len(active_players) <= 1:
+            self.state = self.GameState.SHOWDOWN
+            return True
 
         # Move to next stage
-        if self.state == PokerGame.GameState.PRE_FLOP:
+        if self.state == self.GameState.PRE_FLOP:
             self.deal_community(3)  # Flop
-            self.state = PokerGame.GameState.FLOP
-        elif self.state == PokerGame.GameState.FLOP:
+            self.state = self.GameState.FLOP
+        elif self.state == self.GameState.FLOP:
             self.deal_community(1)  # Turn
-            self.state = PokerGame.GameState.TURN
-        elif self.state == PokerGame.GameState.TURN:
+            self.state = self.GameState.TURN
+        elif self.state == self.GameState.TURN:
             self.deal_community(1)  # River
-            self.state = PokerGame.GameState.RIVER
-        elif self.state == PokerGame.GameState.RIVER:
-            self.state = PokerGame.GameState.SHOWDOWN
+            self.state = self.GameState.RIVER
+        elif self.state == self.GameState.RIVER:
+            self.state = self.GameState.SHOWDOWN
+            return True
 
         # Reset current player to first active player after dealer
         self.current_player = (self.turn + 1) % len(self.players)
@@ -327,11 +366,23 @@ class PokerGame:
         return winner
 
     def get_valid_actions(self, player):
+        if not player == self.players[self.current_player]:
+            return []
+
         max_bet = max(self.bets.values())
-        if self.bets[player] < max_bet:
+        current_bet = self.bets[player]
+
+        if self.state == self.GameState.PRE_FLOP and player == self.players[(self.turn + 1) % len(self.players)]:
+            # Small blind special case
+            return ['call', 'raise', 'fold']
+
+        if current_bet < max_bet:
             return ['call', 'raise', 'fold']
         else:
-            return ['check', 'bet', 'fold']
+            if max_bet == 0:
+                return ['check', 'bet', 'fold']
+            else:
+                return ['check', 'raise', 'fold']
 
     def get_player_decision(self, player):
         decision = [None]
