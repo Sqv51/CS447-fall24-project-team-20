@@ -154,6 +154,10 @@ class PokerGame:
         self.community_cards.extend(self.deck.draw(count))
 
     def player_action(self, player, action, amount=0):
+        # Verify it's actually this player's turn
+        if self.players[self.current_player] != player:
+            return False
+
         if player.folded:
             return False
 
@@ -164,11 +168,15 @@ class PokerGame:
             if action == PokerGame.Moves.FOLD:
                 player.folded = True
                 self.action_log.append(f"{player.name} folded")
+                self.next_player()
+                return True
 
             elif action == PokerGame.Moves.CHECK:
                 if max_bet > current_bet:
                     raise ValueError("Cannot check when there are outstanding bets")
                 self.action_log.append(f"{player.name} checked")
+                self.next_player()
+                return True
 
             elif action == PokerGame.Moves.CALL:
                 call_amount = max_bet - current_bet
@@ -177,6 +185,8 @@ class PokerGame:
                     self.action_log.append(f"{player.name} called {call_amount}")
                 else:
                     self.action_log.append(f"{player.name} checked")
+                self.next_player()
+                return True
 
             elif action == PokerGame.Moves.RAISE:
                 if amount < max_bet + self.minimum_raise:
@@ -185,21 +195,27 @@ class PokerGame:
                 self.action_log.append(f"{player.name} raised to {amount}")
                 self.last_raiser = player
                 self.round_complete = False
+                self.next_player()
+                return True
 
             elif action == PokerGame.Moves.BET:
+                if max_bet > 0:
+                    raise ValueError("Cannot bet when there are outstanding bets. Use raise instead.")
                 if amount < self.minimum_raise:
                     raise ValueError(f"Bet must be at least {self.minimum_raise}")
                 self.place_bet(player, amount)
                 self.action_log.append(f"{player.name} bet {amount}")
                 self.last_raiser = player
                 self.round_complete = False
+                self.next_player()
+                return True
 
-            # Move to next player
-            return self.next_player()
+            return False
 
         except ValueError as e:
             self.action_log.append(f"Invalid action by {player.name}: {str(e)}")
             return False
+
     def sync_with_server(self):
         try:
             # Send request to get updated state
@@ -233,17 +249,22 @@ class PokerGame:
         """Move to the next player who hasn't folded."""
         active_players = [p for p in self.players if not p.folded]
         if len(active_players) <= 1:
+            self.round_complete = True
             return False
 
+        original_player = self.current_player
         while True:
             self.current_player = (self.current_player + 1) % len(self.players)
             if not self.players[self.current_player].folded:
                 break
+            # If we've gone all the way around
+            if self.current_player == original_player:
+                self.round_complete = True
+                break
 
         # Check if round is complete (we've reached the last raiser)
-        if self.last_raiser:
-            if self.players[self.current_player] == self.last_raiser:
-                self.round_complete = True
+        if self.last_raiser and self.players[self.current_player] == self.last_raiser:
+            self.round_complete = True
 
         return True
 
