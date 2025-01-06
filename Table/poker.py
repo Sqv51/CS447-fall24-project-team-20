@@ -48,6 +48,8 @@ class PokerGame:
         self.round_complete = False
         self.action_needed = {player: False for player in players}
         self.current_round_players = []
+        self.start_new_round()
+        self.initial_balances = {player: player.balance for player in players}
 
         # Only deal cards and post blinds if we have enough players
         if len(players) >= 2:
@@ -55,6 +57,31 @@ class PokerGame:
             self.post_blinds()
             # Set current_player after blinds are posted
             self.current_player = (self.turn + 2) % len(self.players)  # Start with player after big blind
+
+    def start_new_round(self):
+        """Initialize a new round of poker."""
+        # Reset deck and hands
+        self.deck = Deck()
+        self.hands = {}
+        self.community_cards = []
+        self.current_player = None
+        self.bets = {player: 0 for player in self.players}
+        self.last_raiser = None
+        self.pot = 0
+        self.state = self.GameState.PRE_FLOP
+        self.action_needed = {player: False for player in self.players}
+        self.round_complete = False
+
+        # Clear any folded status from previous round
+        for player in self.players:
+            player.folded = False
+
+        # Only deal cards and post blinds if we have enough players
+        if len([p for p in self.players if not p.bankrupt]) >= 2:
+            self.deal_initial_cards()
+            self.post_blinds()
+            # Set current_player after blinds are posted
+            self.current_player = (self.turn + 3) % len(self.players)
 
     def deal_initial_cards(self):
         """Deal initial cards to all players."""
@@ -72,15 +99,15 @@ class PokerGame:
 
     def get_player_state(self, player_id):
         """Returns game state specific to the given player."""
-        # Validate player_id is within bounds
         if player_id < 0 or player_id >= len(self.players):
             raise ValueError(f"Invalid player_id: {player_id}")
 
         player = self.players[player_id]
         other_players = [p for p in self.players if p != player]
 
-        # Check if game has enough players to start
-        if len(self.players) < 2:
+        # Check if game has enough non-bankrupt players to start
+        active_players = [p for p in self.players if not p.bankrupt]
+        if len(active_players) < 2:
             return {
                 'player_name': player.name,
                 'player_balance': player.balance,
@@ -91,42 +118,35 @@ class PokerGame:
                 'current_bet': 0,
                 'min_raise': self.minimum_raise,
                 'player_bet': 0,
-                'game_stage': 'waiting_for_players',
+                'game_stage': 'game_over' if player.bankrupt else 'waiting_for_players',
                 'valid_actions': [],
-                'action_log': ['Waiting for more players to join...'],
+                'action_log': self.action_log[-5:],
                 'is_turn': False,
                 'current_player': None
             }
 
-        # Ensure player has cards
-        player_cards = self.hands.get(player, [])
-
-        # Fix turn checking logic
-        is_players_turn = (self.current_player is not None and
-                           player == self.players[self.current_player] and
-                           not player.folded and
-                           self.state != PokerGame.GameState.SHOWDOWN)
-
+        # Normal game state
         return {
             'player_name': player.name,
             'player_balance': player.balance,
-            'player_cards': [Card.int_to_str(c) for c in player_cards],
+            'player_cards': [Card.int_to_str(c) for c in self.hands.get(player, [])],
             'community_cards': [Card.int_to_str(c) for c in self.community_cards],
             'other_players': [{
                 'name': p.name,
                 'balance': p.balance,
                 'bet': self.bets[p],
                 'folded': p.folded,
-                'cards': ['??', '??'] if not p.folded else None
+                'bankrupt': p.bankrupt,
+                'cards': ['??', '??'] if not p.folded and not p.bankrupt else None
             } for p in other_players],
             'pot': self.pot,
             'current_bet': max(self.bets.values()),
             'min_raise': self.minimum_raise,
             'player_bet': self.bets[player],
             'game_stage': self.state.value,
-            'valid_actions': self.get_valid_actions(player) if is_players_turn else [],
+            'valid_actions': self.get_valid_actions(player) if self.current_player is not None and player == self.players[self.current_player] else [],
             'action_log': self.action_log[-5:],
-            'is_turn': is_players_turn,
+            'is_turn': self.current_player is not None and player == self.players[self.current_player],
             'current_player': self.players[self.current_player].name if self.current_player is not None else None
         }
 
@@ -343,26 +363,65 @@ class PokerGame:
 
         return True
 
+    def check_game_end(self):
+        """Check if the game should end and handle next round."""
+        # Count players with money
+        active_players = [p for p in self.players if p.balance > 0]
+
+        if len(active_players) <= 1:
+            # Game is over - one player has all the money
+            winner = active_players[0] if active_players else None
+            self.action_log.append("=== GAME OVER ===")
+            if winner:
+                self.action_log.append(f"{winner.name} wins the game with ${winner.balance}!")
+            return True
+
+        # Rotate dealer position for next round
+        self.turn = (self.turn + 1) % len(self.players)
+
+        # Mark players as bankrupt if they can't pay blinds
+        for player in self.players:
+            if player.balance < self.big_blind:
+                player.bankrupt = True
+                self.action_log.append(f"{player.name} is bankrupt and out of the game!")
+
+        # Start new round if enough players remain
+        active_players = [p for p in self.players if not p.bankrupt]
+        if len(active_players) >= 2:
+            self.action_log.append("\n=== NEW ROUND ===")
+            self.start_new_round()
+            return False
+        else:
+            self.action_log.append("=== GAME OVER ===")
+            if len(active_players) == 1:
+                self.action_log.append(f"{active_players[0].name} wins the game with ${active_players[0].balance}!")
+            return True
+
     def get_winner(self):
+        """Determine the winner and handle pot distribution."""
         active_players = [p for p in self.players if not p.folded]
+        winner = None
+
         if len(active_players) == 1:
             winner = active_players[0]
             winner.balance += self.pot
-            self.action_log.append(f"{winner.name} wins the pot of {self.pot} by default (all others folded)")
-            self.pot = 0
-            return winner
+            self.action_log.append(f"{winner.name} wins the pot of ${self.pot} by default (all others folded)")
+        else:
+            scores = self.evaluate()
+            winner = min(scores, key=scores.get)
+            self.action_log.append(f"Community cards: {[Card.int_to_str(c) for c in self.community_cards]}")
 
-        scores = self.evaluate()
-        winner = min(scores, key=scores.get)
-        winning_hand = scores[winner]
-        winner.balance += self.pot
-        self.action_log.append(f"{winner.name} wins the pot of {self.pot} with a score of {winning_hand}")
-        # display other players hands and scores who did not fold
-        for player, score in scores.items():
-            if player != winner:
-                self.action_log.append(f"{player.name} had a score of {score} and lost the round")
+            # Show all hands at showdown
+            for player, hand in self.hands.items():
+                if not player.folded:
+                    cards_str = [Card.int_to_str(c) for c in hand]
+                    self.action_log.append(f"{player.name}'s hand: {' '.join(cards_str)}")
+
+            winner.balance += self.pot
+            self.action_log.append(f"{winner.name} wins the pot of ${self.pot}")
 
         self.pot = 0
+        self.check_game_end()
         return winner
 
     def get_valid_actions(self, player):

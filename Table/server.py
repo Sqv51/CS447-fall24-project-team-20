@@ -27,7 +27,6 @@ def cleanup_game(game_id):
         del games[game_id]
 
 
-
 def threaded_client(conn, player_id, game_id):
     global id_count
 
@@ -58,13 +57,13 @@ def threaded_client(conn, player_id, game_id):
                             action_successful = game.player_action(player, game.Moves[action.upper()], amount)
 
                             # Check if we should move to next stage
-                            if action_successful and game.round_complete:
+                            if action_successful and game.is_betting_round_complete():
                                 game.next_stage()
 
                             # Check for showdown
                             if game.state == game.GameState.SHOWDOWN:
-                                game.get_winner()
-                                # Start new hand here if desired
+                                winner = game.get_winner()
+                                # Game will automatically start new round if possible
 
                         # Send updated state
                         player_state = game.get_player_state(player_id)
@@ -85,8 +84,6 @@ def threaded_client(conn, player_id, game_id):
     print(f"Player {player_id} disconnected.")
     id_count -= 1
     conn.close()
-    #print game logs here
-    cleanup_game(game_id)
 
 
 while True:
