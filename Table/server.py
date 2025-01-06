@@ -8,7 +8,7 @@ server = "192.168.196.52"
 port = 23345
 
 # Create server socket
-s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+s = socket.socket(socket.AF_INET, socket.SOCK_STREAM) # Create socket with IPv4 and TCP
 try:
     s.bind((server, port))
 except socket.error as e:
