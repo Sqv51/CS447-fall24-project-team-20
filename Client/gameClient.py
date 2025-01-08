@@ -182,7 +182,7 @@ def sync_state(players, buttons, network):
         # Topluluk kartları
         if 'community_cards' in state:
             COMMUNITY_CARDS = state['community_cards']
-            
+
 
         # Kendi kartlarımız
         if 'player_cards' in state:
